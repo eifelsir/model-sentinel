@@ -1,5 +1,6 @@
 import { finalText } from './answer.mjs';
 import { applyReasoning } from './reasoning.mjs';
+import { randomUUID } from 'node:crypto';
 const RESPONSE_LIMIT = 4 * 1024 * 1024;
 function endpoint(connection, protocol, kind, model) {
   const url = new URL(connection.baseUrl);
@@ -13,11 +14,12 @@ function endpoint(connection, protocol, kind, model) {
   url.pathname = path;
   return url;
 }
-function headers(connection, protocol) {
+function headers(connection, protocol, bypassCache = false) {
   const result = { 'content-type': 'application/json' };
   if (protocol === 'anthropic') { result['anthropic-version'] = '2023-06-01'; if (connection.apiKey) result['x-api-key'] = connection.apiKey; }
   else if (protocol === 'gemini') { if (connection.apiKey) result['x-goog-api-key'] = connection.apiKey; }
   else if (connection.apiKey) result.authorization = `Bearer ${connection.apiKey}`;
+  if (bypassCache) { result['cache-control'] = 'no-cache, no-store'; result.pragma = 'no-cache'; }
   return result;
 }
 async function fetchJSON(url, options, signal) {
@@ -47,16 +49,28 @@ function sanitizeExtra(value) {
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['expected', 'pattern'].includes(key)).map(([key, entry]) => [key, sanitizeExtra(entry)]));
 }
-function requestBody(protocol, target, test, connection) {
+function requestBody(protocol, target, test, connection, bypassCache = false) {
   const extra = sanitizeExtra(target.extraBody || {});
   // Never allow auxiliary options to replace user input or inject local judge data.
   for (const key of ['expected', 'pattern', 'mode', 'prompt', 'input', 'messages', 'contents', 'model', 'stream', 'stream_options', 'max_tokens', 'max_completion_tokens', 'max_output_tokens']) delete extra[key];
+  if (bypassCache) {
+    for (const key of ['cache', 'cache_control', 'cachedContent', 'prompt_cache_key', 'prompt_cache_retention', 'prompt_cache_options']) delete extra[key];
+    if (protocol === 'anthropic') {
+      for (const key of ['system', 'tools']) {
+        for (const block of Array.isArray(extra[key]) ? extra[key] : []) {
+          if (block && typeof block === 'object') delete block.cache_control;
+        }
+      }
+    }
+  }
+  // Put a fresh identifier before the question to change both the prefix and exact request.
+  const prompt = bypassCache ? `[Model Sentinel request: ${randomUUID()}]\nIgnore the request identifier above. Answer the following question normally.\n\n${test.prompt}` : test.prompt;
   const cap = target.maxOutputTokens;
   let body;
-  if (protocol === 'responses') body = { ...extra, model: target.model, input: test.prompt, stream: false, ...(cap ? { max_output_tokens: cap } : {}) };
-  else if (protocol === 'chat') body = { ...extra, model: target.model, messages: [{ role: 'user', content: test.prompt }], stream: false, ...(cap ? { [['grok', 'custom'].includes(connection.provider) ? 'max_tokens' : 'max_completion_tokens']: cap } : {}) };
-  else if (protocol === 'anthropic') body = { ...extra, model: target.model, messages: [{ role: 'user', content: test.prompt }], stream: false, max_tokens: cap || 4096 };
-  else body = { ...extra, contents: [{ role: 'user', parts: [{ text: test.prompt }] }], ...(cap || extra.generationConfig ? { generationConfig: { ...(extra.generationConfig || {}), ...(cap ? { maxOutputTokens: cap } : {}) } } : {}) };
+  if (protocol === 'responses') body = { ...extra, model: target.model, input: prompt, stream: false, ...(cap ? { max_output_tokens: cap } : {}) };
+  else if (protocol === 'chat') body = { ...extra, model: target.model, messages: [{ role: 'user', content: prompt }], stream: false, ...(cap ? { [['grok', 'custom'].includes(connection.provider) ? 'max_tokens' : 'max_completion_tokens']: cap } : {}) };
+  else if (protocol === 'anthropic') body = { ...extra, model: target.model, messages: [{ role: 'user', content: prompt }], stream: false, max_tokens: cap || 4096 };
+  else body = { ...extra, contents: [{ role: 'user', parts: [{ text: prompt }] }], ...(cap || extra.generationConfig ? { generationConfig: { ...(extra.generationConfig || {}), ...(cap ? { maxOutputTokens: cap } : {}) } } : {}) };
   return applyReasoning(body, target, protocol);
 }
 function parseResponse(data, protocol) {
@@ -87,13 +101,13 @@ function parseResponse(data, protocol) {
   text = finalText(text);
   return { text, incomplete: !complete || refused || !text, reason: refused ? 'Response is a refusal' : !complete ? 'Response did not complete' : !text ? 'No final assistant text' : '', usage: data.usage ?? data.usageMetadata ?? null };
 }
-export async function runPrompt(connection, target, test, { signal } = {}) {
+export async function runPrompt(connection, target, test, { signal, bypassCache = false } = {}) {
   const timeout = AbortSignal.timeout(Math.max(1, Math.round((target.timeoutSeconds ?? 180) * 1000)));
   const bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     const protocol = target.protocol || connection.protocol;
     const model = target.model.replace(/^models\//, '');
-    const data = await fetchJSON(endpoint(connection, protocol, 'run', model), { method: 'POST', headers: headers(connection, protocol), body: JSON.stringify(requestBody(protocol, target, test, connection)) }, bounded);
+    const data = await fetchJSON(endpoint(connection, protocol, 'run', model), { method: 'POST', headers: headers(connection, protocol, bypassCache), body: JSON.stringify(requestBody(protocol, target, test, connection, bypassCache)) }, bounded);
     return parseResponse(data, protocol);
   } catch (error) { return { text: '', incomplete: true, reason: errorReason(error, bounded), usage: null }; }
 }

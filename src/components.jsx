@@ -218,6 +218,7 @@ export function RoundDetail({ round, onClose }) {
         <span>开始 {time(round.startedAt, true)}</span>
         {round.textCompletedAt && <span>文字完成 {time(round.textCompletedAt, true)}</span>}
         <span>完成 {time(round.completedAt, true)}</span>
+        {round.bypassCache && <span>已请求绕过缓存</span>}
       </div>
       <section className="round-usage">
         <h3>本轮 Token</h3>

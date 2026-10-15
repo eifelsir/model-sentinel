@@ -54,6 +54,7 @@ export class Engine extends EventEmitter {
       const round = {
         id: randomUUID(), targetId: target.id, connectionName: connection.name,
         model: target.model, protocol: target.protocol || connection.protocol, status: 'detecting',
+        bypassCache: this.config.settings.bypassCache,
         startedAt: new Date().toISOString(), completedAt: null,
         results: tests.map(p => ({ promptId: p.id, promptName: p.name, type: p.type, prompt: p.prompt, expected: p.expected, status: 'detecting', answer: '', reason: '', text: '', html: '', usage: null, elapsedMs: 0 })),
       };
@@ -104,7 +105,7 @@ export class Engine extends EventEmitter {
         signal.addEventListener('abort', abortListener, { once: true });
         if (signal.aborted) abortListener();
       });
-      const response = await Promise.race([this.request(context.connection, context.target, context.tests[index], { signal }), cancelled]);
+      const response = await Promise.race([this.request(context.connection, context.target, context.tests[index], { signal, bypassCache: context.round.bypassCache }), cancelled]);
       const fullText = typeof response?.text === 'string' ? response.text : '';
       const text = fullText.slice(0, 65536);
       result.text = text;
@@ -117,7 +118,7 @@ export class Engine extends EventEmitter {
         const redact = value => secrets.reduce((safe, key) => safe.split(key).join('[REDACTED]'), value);
         judged = await Promise.race([judgeWithModel({
           ...context.modelJudge, text: redact(fullText), test: { ...context.tests[index], prompt: redact(context.tests[index].prompt) },
-          request: this.request, signal, localReason: judged.reason,
+          request: this.request, signal, localReason: judged.reason, bypassCache: context.round.bypassCache,
         }), cancelled]);
       }
       if (signal.aborted) throw new Error('cancelled');

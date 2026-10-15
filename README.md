@@ -15,10 +15,11 @@ The interface is currently in Simplified Chinese. No hosted account or additiona
 - **Multiple endpoints and models.** Responses API, Chat Completions, Gemini native, and Claude Messages; model discovery and manual IDs. OpenAI, Grok, Gemini, Claude, and compatible intermediary services.
 - **Repeatable questions.** Several questions per model, local answer extraction and comparison, concurrent requests, configurable intervals, and manual or automatic runs.
 - **Optional model assistance.** When local automatic extraction is unclear, use the current model or another configured model once to extract an answer with a quotation. Expected answers stay local; auxiliary usage and evidence are recorded.
-- **Visible results.** Compact always-on-top window with model names, history bars, text answers, and per-round Token totals; expand for the latest 60 rounds.
+- **Visible results.** Compact always-on-top window with connection and model names, history bars, text answers, and per-round Token totals; expand for the latest 60 rounds. Long connection and model names truncate separately, with full names on hover.
 - **HTML/SVG tests.** Generate a complete SVG animation page. Browse the most recent eight rounds as real thumbnails and open an interactive, isolated preview.
 - **Token accounting.** Per-question and per-round input/output totals, available cache/reasoning details, and per-model totals across retained history. Missing or partial reporting is explicitly labeled.
 - **Model settings.** Provider-aware reasoning choices, output limits, timeouts, per-model question selection, and advanced request JSON.
+- **Optional cache bypass.** Saved switches in the workbench and Settings request fresh input with a per-request random prefix and cache directives across all four protocols, including HTML and auxiliary extraction.
 - **Local persistence.** Atomic configuration saves, encrypted keys, a backup copy, and key-free JSON export.
 - **Built-in questions.** Milk and candy reasoning questions, plus an editable HTML/SVG bicycle animation prompt.
 
@@ -32,7 +33,7 @@ Screenshots use local test responses. They illustrate the application, not a ben
 
 ## Quick Start
 
-1. Download `Model-Sentinel-1.2.0-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
+1. Download `Model-Sentinel-1.2.1-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
 2. Select a built-in question or create one with a prompt and expected answer. Choose the HTML/SVG type for page-generation questions.
 3. Add a connection with its **Base URL**, **KEY**, and **protocol**. Fetch the model list or enter a model ID.
 4. Assign questions to each model and start detection. Enable automatic detection for recurring checks.
@@ -64,11 +65,21 @@ Model discovery and available models depend on your provider and account. Custom
 
 Text results and history bars update as soon as text evaluation finishes, while HTML may still be generating. With several text questions, a mismatch appears immediately and a normal verdict requires all text questions to finish. Queued text requests run before queued HTML requests. HTML pages remain available for human inspection; their success or failure does not change a text verdict.
 
-Expected answers stay local. Original test prompts are sent unchanged. The automatic extractor ignores structured reasoning, supports quantity conclusions and boxed answers, and keeps conflicting or uncertain conclusions insufficient. Exact and regex modes are also available.
+Expected answers stay local. Original test prompts are sent unchanged with cache bypass off (the default). The automatic extractor ignores structured reasoning, supports quantity conclusions and boxed answers, and keeps conflicting or uncertain conclusions insufficient. Exact and regex modes are also available.
 
 **答案辅助判定模型** in Settings is off by default. Select the current tested model or another configured model to make at most one extra extraction call when local automatic extraction is unclear. The assistant receives the question and reply with known saved keys redacted, but no expected answer; it must return a complete literal answer and a quotation found in the reply. Comparison remains local. Evidence, model identity and auxiliary Token usage are shown in details. Explicit conflicts, uncertainty, unfinished expressions, failed requests, refusals, truncation and HTML do not trigger assistance. Cancelled auxiliary calls remain usage samples with unknown counters. Model assistance can itself be wrong; inspect the quoted evidence for disputed results.
 
 A mismatch describes these configured tests. It cannot establish a model's overall intelligence, identity, or whether a provider changed it. API calls, including enabled auxiliary extraction calls, may incur provider charges. No automatic retries are made.
+
+### Caching
+
+Each test sends a new request; the app does not cache answers or append earlier test replies as chat history. Provider prompt/prefix caching reuses input computation while generating a new answer. For example, [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching) does not change the output; a hit alone does not invalidate an answer check. Cache hits can affect latency and cost, so they do not measure cold-input latency.
+
+A proxy's full-response cache is different: it can return an earlier answer instead of calling the model, as documented by [LiteLLM response caching](https://docs.litellm.ai/docs/proxy/caching). Disable that cache for ongoing monitoring of current service behavior. A backend's generic "cache hit" label does not establish which type it uses, and input cache-read Token counts alone do not prove an entire answer was replayed.
+
+**绕过缓存 / Bypass cache** is off by default. Enable it in the workbench or Settings to prepend a new random request identifier, keep the original question after it, send `Cache-Control: no-cache, no-store` and `Pragma: no-cache`, and omit explicit cache-reuse fields from advanced JSON. It applies from the next round to text, HTML and auxiliary extraction requests. Round details retain that bypass was requested; turning it off restores the original prompt and configured cache options. Model discovery is unchanged.
+
+This reduces reuse by exact-request caches and input-prefix caches; it cannot guarantee that a proxy honors cache directives or bypass a semantic cache that ignores the identifier. Provider cache counters may still be nonzero. The prefix changes the model-visible input and adds a small Token overhead, so it may affect replies and cost. For guaranteed service-side behavior, use the provider's own full-response-cache settings.
 
 ## Data and Privacy
 
@@ -100,6 +111,7 @@ npm run test:usage
 npm run test:judgement
 npm run test:html
 npm run test:answers
+npm run test:cache
 node scripts/desktop-boundary-qa.mjs
 node scripts/desktop-regressions.mjs
 ```

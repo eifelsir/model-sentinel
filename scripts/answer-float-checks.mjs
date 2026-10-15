@@ -33,8 +33,12 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
   const rows = floating.locator('.float-compact-row');
   await expect(rows).toHaveCount(2);
   for (const [index, connection] of ['主连接', '备用连接'].entries()) {
+    await expect(rows.nth(index).getByText(connection, { exact: true })).toBeVisible();
     await expect(rows.nth(index).getByText(model, { exact: true })).toBeVisible();
     await expect(rows.nth(index).locator('.float-compact-identity strong')).toHaveAttribute('title', new RegExp(connection));
+    expect(await rows.nth(index).locator('.float-connection-label').evaluate(element => element.getBoundingClientRect().right)).toBeLessThan(
+      await rows.nth(index).locator('.float-model-label').evaluate(element => element.getBoundingClientRect().left),
+    );
     await expect(rows.nth(index).locator('.compact-bars-empty')).toHaveCount(1);
     await expect(rows.nth(index).getByText('未检测', { exact: true })).toBeVisible();
   }
@@ -42,7 +46,7 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
   expect(smallHeight).toBeGreaterThan(150);
   expect(smallHeight).toBeLessThan(300);
   expect(await floating.evaluate(() => innerWidth)).toBeLessThan(400);
-  checks.push('compact float identifies same-name models with connection tooltips and history-bar placeholders');
+  checks.push('compact float visibly prefixes same-name models with their saved connection names');
 
   await page.evaluate(() => window.sentinel.run());
   await expect(rows.nth(0).getByText('检测中', { exact: true })).toBeVisible();
@@ -73,17 +77,25 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
   expect(state.history.find(round => round.targetId === 'secondary').results[0].answer).toBe(narrativeAnswers[0].expected);
   await expect(rows.nth(1).getByText('降智', { exact: true })).toBeVisible();
   await floating.screenshot({ path: screenshots.compact });
-  expect(await rows.nth(0).locator('.float-compact-identity strong').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await rows.nth(0).locator('.float-model-label').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(await floating.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   checks.push('same-name targets keep distinct normal/degraded results and long names fit compact layout');
 
   await floating.getByRole('button', { name: '展开悬浮窗', exact: true }).click();
   await expect(floating.locator('.float-model-row')).toHaveCount(2);
   await expect.poll(() => floating.evaluate(() => innerWidth)).toBeGreaterThan(600);
+  for (const [index, connection] of ['主连接', '备用连接'].entries()) {
+    const identity = floating.locator('.float-model-row').nth(index).locator('.model-identity');
+    await expect(identity.locator('.float-connection-label')).toHaveText(connection);
+    await expect(identity.locator('.float-model-label')).toHaveText(model);
+    expect(await identity.locator('.float-connection-label').evaluate(element => element.getBoundingClientRect().right)).toBeLessThan(
+      await identity.locator('.float-model-label').evaluate(element => element.getBoundingClientRect().left),
+    );
+  }
   await floating.screenshot({ path: screenshots.expanded });
   await floating.getByRole('button', { name: '收起悬浮窗', exact: true }).click();
   await expect.poll(() => floating.evaluate(() => innerHeight)).toBe(smallHeight);
-  checks.push('expand and collapse preserve per-model answers and compact sizing');
+  checks.push('expanded headers also prefix the saved connection and collapsing preserves compact sizing');
 
   await page.evaluate(async () => {
     const { config } = await window.sentinel.getState();
@@ -111,5 +123,21 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
   await expect(rows).toHaveCount(1);
   await expect.poll(() => floating.evaluate(() => innerHeight)).toBeLessThan(smallHeight);
   checks.push('removing models shrinks an already open compact window');
+  const longConnection = 'Provider-connection-name-'.repeat(12);
+  await page.evaluate(async name => {
+    const { config } = await window.sentinel.getState();
+    config.connections[0].name = name;
+    await window.sentinel.saveConfig(config);
+  }, longConnection);
+  await expect(rows.first().locator('.float-connection-label')).toHaveText(longConnection);
+  await expect(rows.first().locator('.float-connection-label')).toHaveAttribute('title', longConnection);
+  for (const selector of ['.float-connection-label', '.float-model-label']) {
+    const label = rows.first().locator(selector);
+    await expect(label).toBeVisible();
+    expect(await label.evaluate(element => element.clientWidth)).toBeGreaterThan(25);
+    expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+  }
+  expect(await floating.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  checks.push('long connection and model names retain separately visible labels without horizontal overflow');
   return checks;
 }

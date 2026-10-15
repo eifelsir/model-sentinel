@@ -3,7 +3,7 @@ import { builtinPrompts } from './builtins.mjs';
 
 export const PROTOCOLS = ['responses', 'chat', 'gemini', 'anthropic'];
 export function defaultConfig() {
-  return { version: 1, builtinsVersion: 1, connections: [], prompts: structuredClone(builtinPrompts), targets: [], settings: { concurrency: 4, autoRun: false, floatVisible: true, launchAtLogin: false, answerJudgeTargetId: '' } };
+  return { version: 1, builtinsVersion: 1, connections: [], prompts: structuredClone(builtinPrompts), targets: [], settings: { concurrency: 4, autoRun: false, floatVisible: true, launchAtLogin: false, answerJudgeTargetId: '', bypassCache: false } };
 }
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
 function text(value, name, max = 100000) {
@@ -61,6 +61,6 @@ export function validateConfig(input) {
   });
   const settings = input.settings || {};
   requireValue(settings.answerJudgeTargetId == null || (typeof settings.answerJudgeTargetId === 'string' && settings.answerJudgeTargetId.length <= 200), 'Invalid answer judge');
-  result.settings = { concurrency: range(settings.concurrency, 4, 1, 32, 'concurrency', true), autoRun: settings.autoRun === true, floatVisible: settings.floatVisible !== false, launchAtLogin: settings.launchAtLogin === true, answerJudgeTargetId: settings.answerJudgeTargetId || '' };
+  result.settings = { concurrency: range(settings.concurrency, 4, 1, 32, 'concurrency', true), autoRun: settings.autoRun === true, floatVisible: settings.floatVisible !== false, launchAtLogin: settings.launchAtLogin === true, answerJudgeTargetId: settings.answerJudgeTargetId || '', bypassCache: settings.bypassCache === true };
   return result;
 }

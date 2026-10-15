@@ -10,6 +10,7 @@ import { narrativeReply, verifyAnswerAndFloat } from './answer-float-checks.mjs'
 import { htmlReply, verifyHtmlAndFloat } from './html-float-checks.mjs';
 import { usageFixture, verifyUsage } from './usage-checks.mjs';
 import { judgementFixture, verifyJudgement } from './judgement-checks.mjs';
+import { verifyCacheControls } from './cache-checks.mjs';
 
 async function freePort() {
   const server = createServer();
@@ -93,6 +94,11 @@ try {
     getFloating: async () => context.pages().find(w => w.url().includes('view=float')),
     screenshotPrefix: resolve('artifacts/screenshots/portable-token'),
   }));
+  checks.push(...await verifyCacheControls(page, {
+    baseUrl: fixture.baseUrl, requests: fixture.requests, screenshot: resolve('artifacts/screenshots/portable-cache-toggle.png'),
+  }));
+  await page.getByRole('switch', { name: '绕过缓存', exact: true }).click();
+  await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).config.settings.bypassCache).toBe(false);
   await page.evaluate(() => window.sentinel.expandFloat(false));
   await page.getByRole('button', { name: '检测工作台', exact: true }).click();
   const key = 'portable-fixture-secret';

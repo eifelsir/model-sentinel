@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.1 - 2026-10-15
+
+### Added
+
+- Saved cache-bypass switches in the workbench and Settings, with a short explanation of input caching and response-cache limits.
+- Per-request random input prefixes and no-cache/no-store directives for all four protocols, including HTML and auxiliary extraction. Explicit cache-reuse options are omitted only while bypass is enabled.
+- Per-round bypass markers, restart coverage, an exact-response-cache regression, and tests for queued requests retaining their original switch setting.
+
+### Changed
+
+- Compact and expanded floating windows display the saved connection name before the model name. Both names truncate separately and retain full-name hover text.
+- Documented the difference between provider input/prefix caching and proxy full-response caching when interpreting repeated tests.
+
+### Fixed
+
+- Same-name models on different connections were indistinguishable in the compact floating window.
+
 ## 1.2.0 - 2026-10-15
 
 ### Added

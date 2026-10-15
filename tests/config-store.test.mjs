@@ -26,6 +26,19 @@ test('config defaults and relationship validation', () => {
   assert.deepEqual(validateConfig(draft).targets[0].promptIds, []);
 });
 
+test('cache bypass defaults off for old profiles and persists when enabled', async () => {
+  const config = defaultConfig();
+  delete config.settings.bypassCache;
+  assert.equal(validateConfig(config).settings.bypassCache, false);
+  config.settings.bypassCache = true;
+  const dir = await mkdtemp(join(tmpdir(), 'sentinel-cache-store-'));
+  try {
+    const store = new Store(dir, {});
+    await store.save(config, []);
+    assert.equal((await new Store(dir, {}).load()).config.settings.bypassCache, true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('HTML questions do not require fixed answers and old questions remain text questions', () => {
   const config = defaultConfig();
   config.prompts = [

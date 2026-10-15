@@ -150,3 +150,104 @@ for (const [path, expectedPath] of [
     assert.equal((await runPrompt({ baseUrl: baseUrl + path, protocol: 'chat' }, { model: 'x' }, { prompt: 'x' })).incomplete, false);
   });
 });
+
+const promptIn = (body, protocol) => protocol === 'responses' ? body.input : protocol === 'gemini' ? body.contents[0].parts[0].text : body.messages[0].content;
+for (const protocol of Object.keys(responses)) {
+  test(`${protocol} cache bypass changes each request prefix, preserves the question and sends cache directives`, async () => {
+    const received = [];
+    const original = 'A fixed question with its original formatting.\nReturn a final answer.';
+    const target = {
+      model: 'model-x', maxOutputTokens: 37,
+      extraBody: { cache: { use_cache: true }, cache_control: { type: 'ephemeral' }, cachedContent: 'saved-input', prompt_cache_key: 'stable-key', prompt_cache_retention: '24h', prompt_cache_options: { prewarm: true }, metadata: { tag: 'keep-me' } },
+    };
+    const before = structuredClone(target);
+    await fixture(async (req, res) => {
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      received.push({ body: JSON.parse(raw), headers: req.headers });
+      res.end(JSON.stringify(responses[protocol]));
+    }, async baseUrl => {
+      for (let index = 0; index < 2; index++) {
+        const result = await runPrompt({ baseUrl, protocol }, target, { prompt: original, expected: 'private-fixed-answer' }, { bypassCache: true });
+        assert.equal(result.text, '21');
+        assert.equal(result.incomplete, false);
+      }
+    });
+    assert.equal(received.length, 2);
+    for (const { body, headers } of received) {
+      const prompt = promptIn(body, protocol);
+      assert.match(prompt, /^\[Model Sentinel request: [0-9a-f-]{36}\]\n/);
+      assert.ok(prompt.endsWith(`\n\n${original}`));
+      assert.equal(headers['cache-control'], 'no-cache, no-store');
+      assert.equal(headers.pragma, 'no-cache');
+      assert.equal(body.metadata.tag, 'keep-me');
+      for (const key of ['cache', 'cache_control', 'cachedContent', 'prompt_cache_key', 'prompt_cache_retention', 'prompt_cache_options']) assert.equal(body[key], undefined);
+      assert.equal(JSON.stringify(body).includes('private-fixed-answer'), false);
+      assert.equal(body.previous_response_id, undefined);
+      assert.equal(body.conversation, undefined);
+      const turns = protocol === 'gemini' ? body.contents : body.messages;
+      if (turns) { assert.equal(turns.length, 1); assert.equal(turns[0].role, 'user'); }
+    }
+    assert.notEqual(promptIn(received[0].body, protocol), promptIn(received[1].body, protocol));
+    assert.deepEqual(target, before);
+  });
+
+  test(`${protocol} cache bypass off retains identical independent requests and advanced options`, async () => {
+    const received = [];
+    await fixture(async (req, res) => {
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      received.push({ body: JSON.parse(raw), headers: req.headers });
+      res.end(JSON.stringify(responses[protocol]));
+    }, async baseUrl => {
+      for (const options of [undefined, { bypassCache: false }]) {
+        await runPrompt({ baseUrl, protocol }, { model: 'model-x', extraBody: { metadata: { tag: 'stable' } } }, { prompt: 'original question' }, options);
+      }
+    });
+    assert.deepEqual(received[0].body, received[1].body);
+    assert.equal(promptIn(received[0].body, protocol), 'original question');
+    for (const { headers } of received) assert.equal(headers['cache-control'], undefined);
+  });
+}
+
+test('cache bypass prevents an exact-request reply cache from replaying an earlier answer', async () => {
+  const cache = new Map();
+  let currentAnswer = '21', generated = 0;
+  await fixture(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    if (!cache.has(raw)) { cache.set(raw, currentAnswer); generated++; }
+    const answer = cache.get(raw);
+    res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: answer } }] }));
+  }, async baseUrl => {
+    const call = options => runPrompt({ baseUrl, protocol: 'chat' }, { model: 'model-x' }, { prompt: 'fixed question' }, options);
+    assert.equal((await call()).text, '21');
+    currentAnswer = '22';
+    assert.equal((await call()).text, '21');
+    assert.equal((await call({ bypassCache: true })).text, '22');
+    currentAnswer = '23';
+    assert.equal((await call({ bypassCache: true })).text, '23');
+    assert.equal(generated, 3);
+  });
+});
+
+test('Anthropic cache bypass removes system and tool breakpoints without altering tools or schemas', async () => {
+  const extraBody = {
+    system: [{ type: 'text', text: 'System text', cache_control: { type: 'ephemeral' } }],
+    tools: [{ name: 'tool', description: 'Retained tool', input_schema: { type: 'object', properties: { cache_control: { type: 'string' } } }, cache_control: { type: 'ephemeral' } }],
+  };
+  const received = [];
+  await fixture(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    received.push(JSON.parse(raw));
+    res.end(JSON.stringify(responses.anthropic));
+  }, async baseUrl => {
+    for (const bypassCache of [false, true]) {
+      await runPrompt({ baseUrl, protocol: 'anthropic' }, { model: 'model-x', extraBody }, { prompt: 'question' }, { bypassCache });
+    }
+  });
+  assert.deepEqual(received[0].system, extraBody.system);
+  assert.deepEqual(received[0].tools, extraBody.tools);
+  assert.deepEqual(received[1].system, [{ type: 'text', text: 'System text' }]);
+  assert.equal(received[1].tools[0].cache_control, undefined);
+  assert.equal(received[1].tools[0].name, 'tool');
+  assert.deepEqual(received[1].tools[0].input_schema, extraBody.tools[0].input_schema);
+  assert.equal(extraBody.system[0].cache_control.type, 'ephemeral');
+});

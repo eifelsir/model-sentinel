@@ -14,7 +14,7 @@ export async function createMockServer({ textForRequest, usageForRequest, before
     for await (const chunk of req) content += chunk;
     let body;
     try { body = JSON.parse(content); } catch { res.writeHead(400); res.end('{}'); return; }
-    requests.push({ path: url.pathname, body, authorization: req.headers.authorization });
+    requests.push({ path: url.pathname, body, authorization: req.headers.authorization, cacheControl: req.headers['cache-control'], pragma: req.headers.pragma });
     const model = body.model || decodeURIComponent(url.pathname.match(/models\/(.*):generateContent/)?.[1] || '');
     await beforeReply?.({ model, body, path: url.pathname });
     if (model.includes('slow')) await new Promise(resolve => setTimeout(resolve, 1500));

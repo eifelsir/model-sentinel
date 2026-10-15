@@ -1,7 +1,7 @@
 {
   "name": "model-sentinel",
   "productName": "Model Sentinel",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Windows desktop monitor for model answer consistency, SVG generation and Token usage",
   "author": "Eifel",
   "homepage": "https://github.com/eifelsir/model-sentinel",
@@ -26,7 +26,8 @@
     "test:usage": "node scripts/usage-qa.mjs",
     "test:judgement": "node scripts/judgement-qa.mjs",
     "test:html": "node scripts/html-float-qa.mjs",
-    "test:answers": "node scripts/answer-float-qa.mjs"
+    "test:answers": "node scripts/answer-float-qa.mjs",
+    "test:cache": "node scripts/cache-qa.mjs"
   },
   "dependencies": {
     "lucide-react": "1.57.0",

@@ -122,6 +122,9 @@ export function Workbench({
           </span>
         </div>
       </div>
+      <div className="workbench-cache">
+        <CacheToggle settings={config.settings} mutate={mutate} busy={busy} />
+      </div>
       <section className="prompt-section">
         <div className="section-title">
           <FileText size={17} />
@@ -1052,6 +1055,7 @@ export function SettingsPage({ state, mutate, busy, perform, api }) {
             <Settings2 size={17} />
             <h2>检测与运行</h2>
           </div>
+          <CacheToggle settings={settings} mutate={mutate} busy={busy} />
           <label className="setting-row">
             <div>
               <strong>答案辅助判定模型</strong>
@@ -1170,7 +1174,21 @@ export function SettingsPage({ state, mutate, busy, perform, api }) {
     </>
   );
 }
-function SettingToggle({ label, description, checked, onChange, disabled }) {
+function CacheToggle({ settings, mutate, busy }) {
+  return (
+    <SettingToggle
+      label="绕过缓存"
+      description={<><span>提示词缓存通常不影响结果，不放心可开启绕过。</span><br /><span>整条回复缓存可能影响检测；绕过效果取决于服务商。</span></>}
+      title="从下一轮检测生效；每次加入随机标记，可能增加少量输入 Token"
+      checked={settings.bypassCache}
+      disabled={busy}
+      onChange={value => {
+        void mutate(config => { config.settings.bypassCache = value; }).catch(() => {});
+      }}
+    />
+  );
+}
+function SettingToggle({ label, description, checked, onChange, disabled, title }) {
   return (
     <label className="setting-row">
       <div>
@@ -1181,6 +1199,7 @@ function SettingToggle({ label, description, checked, onChange, disabled }) {
         type="checkbox"
         role="switch"
         aria-label={label}
+        title={title}
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}

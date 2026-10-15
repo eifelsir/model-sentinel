@@ -360,10 +360,10 @@ function Floating({ state, api, perform, error }) {
             <span className="float-compact-models">
               {latest.map(({ target, connection, round }) => {
                 const rounds = state.history.filter(r => r.targetId === target.id);
-                return <button type="button" key={target.id} className="float-compact-row" aria-label={`展开模型 ${target.model} · ${connection?.name || ""}`} onClick={() => perform(() => api.expandFloat(true))}>
+                return <button type="button" key={target.id} className="float-compact-row" aria-label={`展开模型 ${connection?.name || ""} · ${target.model}`} onClick={() => perform(() => api.expandFloat(true))}>
                   <span className="float-compact-top">
                     <span className="float-compact-identity">
-                      <strong title={`${target.model}\n${connection?.name || ""} · ${protocolNames[target.protocol || connection?.protocol]}`}>{target.model}</strong>
+                      <FloatModelName target={target} connection={connection} />
                     </span>
                     <Status status={round?.status} />
                   </span>
@@ -407,9 +407,8 @@ function Floating({ state, api, perform, error }) {
               <article key={target.id} className="float-model-row">
                 <div className="float-model-top">
                   <div className="model-identity">
-                    <strong title={target.model}>{target.model}</strong>
+                    <FloatModelName target={target} connection={connection} />
                     <small>
-                      {connection?.name} ·{" "}
                       {protocolNames[target.protocol || connection?.protocol]}
                     </small>
                   </div>
@@ -459,6 +458,17 @@ function Floating({ state, api, perform, error }) {
         </div>
       )}
     </div>
+  );
+}
+
+function FloatModelName({ target, connection }) {
+  const connectionName = connection?.name || "未命名连接";
+  return (
+    <strong className="float-model-name" title={`${connectionName} · ${target.model}\n${protocolNames[target.protocol || connection?.protocol] || ""}`}>
+      <span className="float-connection-label" title={connectionName}>{connectionName}</span>
+      <span className="float-name-separator" aria-hidden="true">·</span>
+      <span className="float-model-label" title={target.model}>{target.model}</span>
+    </strong>
   );
 }
 

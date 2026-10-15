@@ -38,7 +38,7 @@ export function modelJudgement({ connection, target, localReason }) {
   };
 }
 
-export async function judgeWithModel({ text, test, connection, target, request, signal, localReason }) {
+export async function judgeWithModel({ text, test, connection, target, request, signal, localReason, bypassCache = false }) {
   const judgement = modelJudgement({ connection, target, localReason });
   let reason = 'Model judge failed';
   const started = Date.now();
@@ -52,7 +52,7 @@ export async function judgeWithModel({ text, test, connection, target, request, 
       'Do not pick a number merely because it appears in the reasoning. Do not correct, calculate, or invent the answer.',
       JSON.stringify({ question: test.prompt, reply: text }),
     ].join('\n');
-    const response = await request(connection, { ...target, extraBody: {}, reasoningEffort: '', maxOutputTokens: 2048 }, { prompt }, { signal });
+    const response = await request(connection, { ...target, extraBody: {}, reasoningEffort: '', maxOutputTokens: 2048 }, { prompt }, { signal, bypassCache });
     judgement.usage = normalizeUsage(response?.usage, judgement.protocol);
     judgement.text = typeof response?.text === 'string' ? response.text.slice(0, 12000) : '';
     if (response?.incomplete || signal?.aborted) throw new Error();

@@ -53,6 +53,10 @@ export function reasonText(reason) {
   const reasons = {
     "Answer matches": "提取答案与固定答案一致",
     "Answer differs": "提取答案与固定答案不一致",
+    "Model-assisted answer matches": "模型辅助提取的答案与固定答案一致",
+    "Model-assisted answer differs": "模型辅助提取的答案与固定答案不一致",
+    "Model judge failed": "辅助模型未返回有效结果",
+    "Model judge could not identify a supported answer": "辅助模型未能提取有原文依据的明确答案",
     "Pattern did not match": "回复未匹配提取表达式",
     "Invalid regular expression": "提取表达式无效",
     "Regex evaluation requires worker isolation": "正则提取未能执行",
@@ -212,6 +216,7 @@ export function RoundDetail({ round, onClose }) {
       </div>
       <div className="detail-times">
         <span>开始 {time(round.startedAt, true)}</span>
+        {round.textCompletedAt && <span>文字完成 {time(round.textCompletedAt, true)}</span>}
         <span>完成 {time(round.completedAt, true)}</span>
       </div>
       <section className="round-usage">
@@ -229,7 +234,7 @@ export function RoundDetail({ round, onClose }) {
           </div>
           {result.type === "html" ? result.html ? (
             <HtmlPage roundId={round.id} index={i} title={result.promptName} />
-          ) : <p className="html-page-empty">未收到完整的 SVG HTML 页面</p> : <div className="answer-pair">
+          ) : <p className="html-page-empty">{result.status === "detecting" ? "HTML 生成中…" : "未收到完整的 SVG HTML 页面"}</p> : <div className="answer-pair">
             <div>
               <span className="overline">固定答案</span>
               <pre>{result.expected || "—"}</pre>
@@ -241,6 +246,14 @@ export function RoundDetail({ round, onClose }) {
           </div>}
           <p className="result-reason">{reasonText(result.reason)}</p>
           <UsageBreakdown values={[result.usage]} />
+          {result.judgement && <div className="result-judgement">
+            <h4>模型辅助提取 · {result.judgement.model}</h4>
+            <p>{result.judgement.connectionName} · {protocolNames[result.judgement.protocol]}</p>
+            <p>本地提取：{reasonText(result.judgement.localReason)}</p>
+            {result.judgement.evidence && <pre className="raw-text">{result.judgement.evidence}</pre>}
+            <UsageBreakdown values={[result.judgement.usage]} />
+            <details><summary>辅助模型回复</summary><pre className="raw-text">{result.judgement.text || "未收到最终回复"}</pre></details>
+          </div>}
           <details>
             <summary>提示词原文</summary>
             <pre className="raw-text">{result.prompt || "—"}</pre>

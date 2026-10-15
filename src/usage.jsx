@@ -1,6 +1,6 @@
 import React from "react";
 import { ChartNoAxesColumnIncreasing } from "lucide-react";
-import { aggregateUsage, roundUsage } from "../core/usage.mjs";
+import { aggregateUsage, roundUsage, usageRecords } from "../core/usage.mjs";
 
 const metrics = [
   ["inputTokens", "输入"],
@@ -31,17 +31,18 @@ export function UsageBreakdown({ values, summary = aggregateUsage(values || []) 
 }
 
 export function UsageSummary({ history }) {
-  const summary = aggregateUsage(history.flatMap(round => (round.results || []).filter(result => result.promptId).map(result => result.usage)));
+  const records = history.flatMap(usageRecords);
+  const summary = aggregateUsage(records.map(record => record.usage));
   const groups = new Map();
-  for (const round of history) {
-    const key = JSON.stringify([round.targetId, round.model, round.connectionName, round.protocol]);
-    if (!groups.has(key)) groups.set(key, { key, model: round.model, connection: round.connectionName, protocol: round.protocol, values: [] });
-    groups.get(key).values.push(...(round.results || []).filter(result => result.promptId).map(result => result.usage));
+  for (const record of records) {
+    const key = JSON.stringify([record.targetId, record.model, record.connectionName, record.protocol]);
+    if (!groups.has(key)) groups.set(key, { key, model: record.model, connection: record.connectionName, protocol: record.protocol, values: [] });
+    groups.get(key).values.push(record.usage);
   }
   return <section className="token-section">
     <div className="section-title"><ChartNoAxesColumnIncreasing size={17} /><h2>Token 使用情况</h2></div>
     <div data-testid="token-summary">
-      <p className="usage-scope">已保存历史 · {history.length} 轮 · {summary.samples} 次题目请求</p>
+      <p className="usage-scope">已保存历史 · {history.length} 轮 · {summary.samples} 次接口请求</p>
       <UsageBreakdown summary={summary} />
       <p className="usage-coverage">接口返回用量 {summary.reported} / {summary.samples} 次；总计完整 {summary.counts.totalTokens} / {summary.samples} 次</p>
     </div>

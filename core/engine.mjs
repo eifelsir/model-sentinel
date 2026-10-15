@@ -5,11 +5,14 @@ import { runPrompt } from './api.mjs';
 import { evaluateSafely } from './answer.mjs';
 import { boundedHistory, recoverHistory } from './store.mjs';
 import { normalizeUsage } from './usage.mjs';
+import { roundStatus } from './round.mjs';
+import { needsModelJudge, modelJudgement, judgeWithModel } from './model-judge.mjs';
 
 export class Engine extends EventEmitter {
   constructor({ config, history = [], request = runPrompt, judge = evaluateSafely, persist = () => {} }) {
     super();
     this.config = validateConfig(config);
+    this.knownSecrets = new Set(this.config.connections.map(connection => connection.apiKey).filter(Boolean));
     this.history = boundedHistory(recoverHistory(structuredClone(history)));
     this.request = request; this.judge = judge; this.persist = persist;
     this.active = new Map(); this.queue = []; this.inFlight = 0; this.nextRuns = {};
@@ -29,6 +32,7 @@ export class Engine extends EventEmitter {
   updateConfig(config) {
     if (this.closed) return;
     this.config = validateConfig(config);
+    for (const connection of this.config.connections) if (connection.apiKey) this.knownSecrets.add(connection.apiKey);
     for (const id of Object.keys(this.nextRuns)) {
       if (!this.config.settings.autoRun || !this.config.targets.some(t => t.id === id && t.enabled)) delete this.nextRuns[id];
     }
@@ -55,7 +59,11 @@ export class Engine extends EventEmitter {
       };
       let resolve, reject;
       const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-      const context = { target: structuredClone(target), connection: structuredClone(connection), tests: structuredClone(tests), round, controller: new AbortController(), remaining: tests.length, promise, resolve, reject };
+      const judgeId = this.config.settings.answerJudgeTargetId;
+      const judgeTarget = judgeId === '@current' ? target : this.config.targets.find(t => t.id === judgeId);
+      const judgeConnection = judgeTarget && this.config.connections.find(c => c.id === judgeTarget.connectionId);
+      const modelJudge = judgeTarget && judgeConnection ? structuredClone({ target: judgeTarget, connection: judgeConnection }) : null;
+      const context = { target: structuredClone(target), connection: structuredClone(connection), tests: structuredClone(tests), modelJudge, round, controller: new AbortController(), remaining: tests.length, promise, resolve, reject };
       // Register every target before starting any asynchronous request.
       this.active.set(target.id, context);
       delete this.nextRuns[target.id];
@@ -76,7 +84,8 @@ export class Engine extends EventEmitter {
   }
   pump() {
     while (!this.closed && this.inFlight < this.config.settings.concurrency && this.queue.length) {
-      const job = this.queue.shift();
+      const textIndex = this.queue.findIndex(job => job.context.tests[job.index].type !== 'html');
+      const [job] = this.queue.splice(textIndex < 0 ? 0 : textIndex, 1);
       if (job.context.controller.signal.aborted) { this.finishJob(job, { status: 'insufficient', reason: 'Request cancelled', answer: '', text: '', elapsedMs: 0 }); continue; }
       this.inFlight++;
       void this.execute(job).finally(() => { this.inFlight--; this.pump(); });
@@ -101,9 +110,19 @@ export class Engine extends EventEmitter {
       result.text = text;
       result.usage = normalizeUsage(response?.usage, context.round.protocol);
       if (signal.aborted) throw new Error('cancelled');
-      const judged = response?.incomplete ? { status: 'insufficient', answer: '', reason: response.reason || 'Response did not complete' } : await Promise.race([this.judge(fullText, context.tests[index]), cancelled]);
+      let judged = response?.incomplete ? { status: 'insufficient', answer: '', reason: response.reason || 'Response did not complete' } : await Promise.race([this.judge(fullText, context.tests[index]), cancelled]);
+      if (!response?.incomplete && context.modelJudge && needsModelJudge(judged, context.tests[index])) {
+        result.judgement = modelJudgement({ ...context.modelJudge, localReason: judged.reason });
+        const secrets = [...this.knownSecrets].sort((a, b) => b.length - a.length);
+        const redact = value => secrets.reduce((safe, key) => safe.split(key).join('[REDACTED]'), value);
+        judged = await Promise.race([judgeWithModel({
+          ...context.modelJudge, text: redact(fullText), test: { ...context.tests[index], prompt: redact(context.tests[index].prompt) },
+          request: this.request, signal, localReason: judged.reason,
+        }), cancelled]);
+      }
+      if (signal.aborted) throw new Error('cancelled');
       if (!judged || !['normal', 'degraded', 'insufficient', 'generated'].includes(judged.status)) throw new Error('Invalid judge result');
-      result = { ...result, status: judged.status, answer: String(judged.answer || '').slice(0, 10000), reason: String(judged.reason || '').slice(0, 2000), text, html: judged.html || '', elapsedMs: 0 };
+      result = { ...result, status: judged.status, answer: String(judged.answer || '').slice(0, 10000), reason: String(judged.reason || '').slice(0, 2000), text, html: judged.html || '', ...(judged.judgement ? { judgement: judged.judgement } : {}), elapsedMs: 0 };
     } catch {
       result.reason = signal.aborted ? (timeout.aborted && !context.controller.signal.aborted ? 'Request timed out' : 'Request cancelled') : 'Request or answer evaluation failed';
     } finally {
@@ -116,12 +135,10 @@ export class Engine extends EventEmitter {
     if (context.round.results[index].status !== 'detecting') return;
     context.round.results[index] = { ...context.round.results[index], ...result };
     context.remaining--;
-    if (context.remaining) { this.change(); return; }
-    const statuses = context.round.results.map(r => r.status);
-    context.round.status = statuses.includes('degraded') ? 'degraded'
-      : statuses.every(s => s === 'normal' || s === 'generated')
-        ? statuses.includes('normal') ? 'normal' : 'generated'
-        : 'insufficient';
+    context.round.status = roundStatus(context.round.results);
+    const text = context.round.results.filter(r => r.type !== 'html');
+    if (text.length && text.every(r => r.status !== 'detecting')) context.round.textCompletedAt ||= new Date().toISOString();
+    if (context.remaining) { void this.save().catch(() => {}); this.change(); return; }
     context.round.completedAt = new Date().toISOString();
     const current = this.config.targets.find(t => t.id === context.target.id && t.enabled);
     if (!this.closed && this.config.settings.autoRun && current) this.nextRuns[current.id] = new Date(Date.now() + current.intervalMinutes * 60000).toISOString();

@@ -1,5 +1,10 @@
 export const narrativeAnswers = [
   {
+    name: 'height answer followed by a therefore equation on the same paragraph',
+    expected: '46.24',
+    text: String.raw`The average adult height is **46.24 inches**. An individual reaches 54 inches only if their father supplies milk **and** they can digest it. Otherwise, their average height is 42 inches. Let \(q\) be the frequency of allele 0. Hardy–Weinberg equilibrium gives \[ q^2=\frac12,\qquad q=\frac1{\sqrt2}. \] Half of fathers are \(0/0\), so probability that a father supplies milk is \(1/2\). Among milk-supplying fathers, we must exclude those whose children are \(0/0\). A \(0/0\) child with a milk-supplying father must have a heterozygous \(0/1\) father. The probability of this combination is \[ P(\text{father }0/1)\,P(\text{father transmits }0)\,P(\text{mother transmits }0)=2q(1-q)\cdot\frac12\cdot q=q^2(1-q). \] Thus, the fraction of offspring who both receive and can digest milk is \[ \frac12-q^2(1-q)=\frac{1}{2\sqrt2}\approx0.3535534. \] The population's average adult height is therefore \[ 42+12\left(\frac{1}{2\sqrt2}\right)=46.2426407\ldots=\boxed{46.24\text{ inches}}. \]`,
+  },
+  {
     name: 'candy answer with uncertain cases in the proof',
     expected: '21',
     text: String.raw`最少取出 **21 颗**。关键是可以凭手感选择糖果的形状。

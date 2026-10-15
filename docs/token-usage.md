@@ -13,6 +13,8 @@ Use reported total_tokens/totalTokenCount when present. Otherwise derive a total
 
 History aggregation sums each known metric separately and records its coverage. A partial total is not completed by adding unmatched input/output across different requests. Summaries cover retained history, not the lifetime account or billing cost. Existing history without usage stays unknown.
 
+Optional model-assisted answer extraction adds an actual auxiliary API request. Its usage stays separate from the original result, appears in that result's details, and is included once in the round total. Model summaries attribute it to the auxiliary model/connection/protocol. Missing auxiliary usage is unknown and makes the corresponding total partial.
+
 Primary references:
 
 - https://developers.openai.com/api/reference/resources/responses/object#usage

@@ -49,6 +49,13 @@ export function aggregateUsage(values) {
   return summary;
 }
 
+export function usageRecords(round) {
+  return (round?.results || []).filter(result => result.promptId).flatMap(result => [
+    { targetId: round.targetId, model: round.model, connectionName: round.connectionName, protocol: round.protocol, usage: result.usage },
+    ...(result.judgement ? [{ ...result.judgement, auxiliary: true }] : []),
+  ]);
+}
+
 export function roundUsage(round) {
-  return aggregateUsage((round?.results || []).filter(result => result.promptId).map(result => result.usage));
+  return aggregateUsage(usageRecords(round).map(record => record.usage));
 }

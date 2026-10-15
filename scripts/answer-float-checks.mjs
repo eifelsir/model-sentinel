@@ -51,13 +51,13 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
   for (const id of ['primary', 'secondary']) {
     const round = state.history.find(round => round.targetId === id);
     expect(round.status).toBe('normal');
-    expect(round.results.map(result => result.answer)).toEqual(['21', '46.24', '21']);
+    expect(round.results.map(result => result.answer)).toEqual(narrativeAnswers.map(fixture => fixture.expected));
   }
   await expect(rows.nth(0).getByText('正常', { exact: true })).toBeVisible();
   await expect(rows.nth(1).getByText('正常', { exact: true })).toBeVisible();
   await expect(rows.nth(0).locator('.float-compact-answers')).toContainText('46.24');
   await expect(rows.nth(0).locator('.history-bar')).toHaveCount(1);
-  checks.push('all three actual narrative responses including the latest candy reply pass over local Responses HTTP');
+  checks.push('all actual narrative responses including the screenshot height reply pass over local Responses HTTP');
 
   await page.evaluate(async () => {
     const { config } = await window.sentinel.getState();
@@ -70,7 +70,7 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
   await expect(rows.nth(0).getByText('正常', { exact: true })).toBeVisible();
   await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).activeTargetIds.length, { timeout: 15000 }).toBe(0);
   state = await page.evaluate(() => window.sentinel.getState());
-  expect(state.history.find(round => round.targetId === 'secondary').results[0].answer).toBe('21');
+  expect(state.history.find(round => round.targetId === 'secondary').results[0].answer).toBe(narrativeAnswers[0].expected);
   await expect(rows.nth(1).getByText('降智', { exact: true })).toBeVisible();
   await floating.screenshot({ path: screenshots.compact });
   expect(await rows.nth(0).locator('.float-compact-identity strong').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);

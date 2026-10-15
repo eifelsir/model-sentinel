@@ -163,6 +163,61 @@ test('truncated HTML replies never create previewable artifacts', async () => {
   } finally { await engine.close(); }
 });
 
+test('text verdict and persisted history are ready while HTML is still generating', async () => {
+  const value = config();
+  value.prompts.push({ id: 'html', name: 'HTML', prompt: 'HTML', type: 'html' });
+  value.targets = [{ ...value.targets[0], promptIds: ['p', 'html'] }];
+  let releaseHtml;
+  const heldHtml = new Promise(resolve => { releaseHtml = resolve; });
+  const saved = [];
+  const engine = new Engine({
+    config: value,
+    request: async (_c, _t, p) => p.type === 'html' ? heldHtml : { text: '21' },
+    persist: async (_c, h) => saved.push(structuredClone(h)),
+  });
+  try {
+    const pending = engine.run();
+    await pause(20);
+    const round = engine.snapshot().history[0];
+    assert.equal(round.status, 'normal');
+    assert.equal(round.completedAt, null);
+    assert.ok(round.textCompletedAt);
+    assert.equal(round.results[1].status, 'detecting');
+    assert.deepEqual(engine.snapshot().activeTargetIds, ['a']);
+    assert.equal(saved.at(-1)[0].status, 'normal');
+    releaseHtml({ text: 'No HTML generated' });
+    await pending;
+    assert.equal(engine.snapshot().history[0].status, 'normal');
+    assert.equal(engine.snapshot().history[0].results[1].status, 'insufficient');
+  } finally { releaseHtml({ text: animation }); await engine.close(); }
+});
+
+test('HTML success cannot hide a wrong or incomplete text answer', async () => {
+  for (const [reply, status] of [['22', 'degraded'], ['I cannot answer this question.', 'insufficient']]) {
+    const value = config();
+    value.prompts.push({ id: 'html', name: 'HTML', prompt: 'HTML', type: 'html' });
+    value.targets = [{ ...value.targets[0], promptIds: ['p', 'html'] }];
+    const engine = new Engine({ config: value, request: async (_c, _t, p) => ({ text: p.type === 'html' ? animation : reply }) });
+    try {
+      await engine.run();
+      assert.equal(engine.snapshot().history[0].status, status);
+    } finally { await engine.close(); }
+  }
+});
+
+test('queued text requests start before HTML even when HTML is assigned first', async () => {
+  const value = config();
+  value.settings.concurrency = 1;
+  value.prompts.push({ id: 'html', name: 'HTML', prompt: 'HTML', type: 'html' });
+  value.targets = [{ ...value.targets[0], promptIds: ['html', 'p'] }];
+  const order = [];
+  const engine = new Engine({ config: value, request: async (_c, _t, p) => { order.push(p.id); return { text: p.type === 'html' ? animation : '21' }; } });
+  try {
+    await engine.run();
+    assert.deepEqual(order, ['p', 'html']);
+  } finally { await engine.close(); }
+});
+
 test('engine retains normalized usage for completed and incomplete answers with protocol overrides', async () => {
   const value = config();
   value.targets = [

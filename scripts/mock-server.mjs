@@ -1,6 +1,6 @@
 import http from 'node:http';
 
-export async function createMockServer({ textForRequest, usageForRequest } = {}) {
+export async function createMockServer({ textForRequest, usageForRequest, beforeReply } = {}) {
   const requests = [];
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -16,6 +16,7 @@ export async function createMockServer({ textForRequest, usageForRequest } = {})
     try { body = JSON.parse(content); } catch { res.writeHead(400); res.end('{}'); return; }
     requests.push({ path: url.pathname, body, authorization: req.headers.authorization });
     const model = body.model || decodeURIComponent(url.pathname.match(/models\/(.*):generateContent/)?.[1] || '');
+    await beforeReply?.({ model, body, path: url.pathname });
     if (model.includes('slow')) await new Promise(resolve => setTimeout(resolve, 1500));
     const text = textForRequest?.({ model, body, path: url.pathname }) ?? (model.includes('echo-key') ? `最终答案：42\n服务回显 ${req.headers.authorization || ''}` : model.includes('wrong') ? '最终答案：43' : '经过计算，6 × 7 = 42。\n最终答案：42');
     const incomplete = model.includes('incomplete');

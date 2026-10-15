@@ -12,6 +12,20 @@ for (const fixture of narrativeAnswers) {
 }
 
 for (const [text, expected, status, answer] of [
+  ['The average adult height is therefore 46.24 inches.', '46.24', 'normal', '46.24'],
+  ['Final answer: 21 pieces.', '21', 'normal', '21'],
+  ['Final answer: 21 pieces + 2 pieces.', '21', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. Otherwise, their average height is 42 inches.', '46.24', 'normal', '46.24'],
+  ['The average adult height is 46.24 inches. If no milk is available, the average height is 42 inches.', '46.24', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. With all calculations included, the average adult height is 47.24 inches.', '46.24', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. When calculated correctly, the average adult height is 47.24 inches.', '46.24', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. Without any rounding, the average adult height is 47.24 inches.', '46.24', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. In this case, the average adult height is 47.24 inches.', '46.24', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. If calculated correctly, the average adult height is 47.24 inches.', '46.24', 'insufficient', ''],
+  ['The average adult height is 46.24 inches. The average height is 42 inches.', '46.24', 'insufficient', ''],
+  [String.raw`The average height is therefore \[42+4.24=\boxed{46.24\text{ inches}}.\]`, '46.24', 'normal', '46.24'],
+  [String.raw`The average height is 47.24 inches. \(\boxed{46.24}\)`, '46.24', 'insufficient', ''],
+  [String.raw`The average height is therefore \[42+4.24=\boxed{47.24\text{ inches}}.\]`, '46.24', 'degraded', '47.24'],
   ['最少取出 **21 颗**。\n证明中可能出现多种情况，但不影响这个下界。', '21', 'normal', '21'],
   ['一种情况可能不满足要求。\n所以，最少需要 **21 颗**。', '21', 'normal', '21'],
   ['最少需要取出 **21 个**。', '21', 'normal', '21'],

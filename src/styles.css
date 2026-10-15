@@ -1177,6 +1177,17 @@ input[type="checkbox"][role="switch"]:checked:before {
 .setting-row > input[type="checkbox"] {
   margin-right: 4px;
 }
+.setting-row > select {
+  width: 260px;
+  max-width: 45%;
+  min-width: 140px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  background: white;
+  color: var(--ink);
+}
 .data-counts {
   display: flex;
   gap: 24px;
@@ -1358,6 +1369,15 @@ input[type="checkbox"][role="switch"]:checked:before {
   font-size: 11px;
   color: #74867a;
   margin: 11px 0 15px;
+}
+.result-judgement {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.result-judgement p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 8px 0;
 }
 .result details summary {
   cursor: pointer;

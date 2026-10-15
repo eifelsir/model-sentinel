@@ -25,6 +25,7 @@ export async function verifyHtmlAndFloat(page, { baseUrl, requests, getFloating,
     const { config } = await window.sentinel.getState();
     config.settings.autoRun = false;
     config.settings.floatVisible = true;
+    config.settings.answerJudgeTargetId = '';
     config.connections = [{ id: 'local-html', name: '1', baseUrl, apiKey: 'html-fixture-private-key', protocol: 'responses', models: [] }];
     config.prompts = [
       { id: 'text', type: 'text', name: '糖果题', prompt: 'candy-fixture', expected: '21', mode: 'auto', pattern: '' },
@@ -59,7 +60,8 @@ export async function verifyHtmlAndFloat(page, { baseUrl, requests, getFloating,
   const state = await page.evaluate(() => window.sentinel.getState());
   expect(state.history.find(r => r.targetId === 'text-html').status).toBe('normal');
   expect(state.history.find(r => r.targetId === 'html-only').status).toBe('generated');
-  expect(state.history.filter(r => r.targetId === 'text-html' && r.status === 'insufficient')).toHaveLength(1);
+  expect(state.history.filter(r => r.targetId === 'text-html' && r.status === 'insufficient')).toHaveLength(0);
+  expect(state.history.filter(r => r.targetId === 'text-html' && r.results.some(result => result.type === 'html' && result.status === 'insufficient'))).toHaveLength(1);
   const payload = requests.find(r => r.body.input === 'candy-fixture').body;
   expect(payload.reasoning).toEqual({ effort: 'high' });
   expect(payload.max_output_tokens).toBe(12000);

@@ -14,6 +14,7 @@ The interface is currently in Simplified Chinese. No hosted account or additiona
 
 - **Multiple endpoints and models.** Responses API, Chat Completions, Gemini native, and Claude Messages; model discovery and manual IDs. OpenAI, Grok, Gemini, Claude, and compatible intermediary services.
 - **Repeatable questions.** Several questions per model, local answer extraction and comparison, concurrent requests, configurable intervals, and manual or automatic runs.
+- **Optional model assistance.** When local automatic extraction is unclear, use the current model or another configured model once to extract an answer with a quotation. Expected answers stay local; auxiliary usage and evidence are recorded.
 - **Visible results.** Compact always-on-top window with model names, history bars, text answers, and per-round Token totals; expand for the latest 60 rounds.
 - **HTML/SVG tests.** Generate a complete SVG animation page. Browse the most recent eight rounds as real thumbnails and open an interactive, isolated preview.
 - **Token accounting.** Per-question and per-round input/output totals, available cache/reasoning details, and per-model totals across retained history. Missing or partial reporting is explicitly labeled.
@@ -31,7 +32,7 @@ Screenshots use local test responses. They illustrate the application, not a ben
 
 ## Quick Start
 
-1. Download `Model-Sentinel-1.1.0-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
+1. Download `Model-Sentinel-1.2.0-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
 2. Select a built-in question or create one with a prompt and expected answer. Choose the HTML/SVG type for page-generation questions.
 3. Add a connection with its **Base URL**, **KEY**, and **protocol**. Fetch the model list or enter a model ID.
 4. Assign questions to each model and start detection. Enable automatic detection for recurring checks.
@@ -56,14 +57,18 @@ Model discovery and available models depend on your provider and account. Custom
 
 | Result | Meaning |
 | --- | --- |
-| 正常 / Normal | Every text answer matched and all selected HTML outputs were complete. |
+| 正常 / Normal | Every selected text answer matched. HTML generation does not affect this verdict. |
 | 降智 / Mismatch | At least one explicit extracted answer differed from the configured answer. |
-| 结果不足 / Insufficient | No explicit mismatch, but a request failed, timed out, was refused/truncated, or lacked an unambiguous result. |
+| 结果不足 / Insufficient | No explicit text mismatch, but a text request failed, timed out, was refused/truncated, or lacked an unambiguous result. |
 | 已生成 / Generated | An HTML-only round returned complete HTML containing SVG. This does not grade visual quality. |
 
-Expected answers stay local. Prompts are sent unchanged. The automatic extractor ignores structured reasoning, supports quantity conclusions and boxed answers, and preserves uncertainty or contradictory conclusions as insufficient. Exact and regex modes are also available.
+Text results and history bars update as soon as text evaluation finishes, while HTML may still be generating. With several text questions, a mismatch appears immediately and a normal verdict requires all text questions to finish. Queued text requests run before queued HTML requests. HTML pages remain available for human inspection; their success or failure does not change a text verdict.
 
-A mismatch describes these configured tests. It cannot establish a model's overall intelligence, identity, or whether a provider changed it. API calls may incur charges from your provider. No hidden retries or extra LLM judging calls are made.
+Expected answers stay local. Original test prompts are sent unchanged. The automatic extractor ignores structured reasoning, supports quantity conclusions and boxed answers, and keeps conflicting or uncertain conclusions insufficient. Exact and regex modes are also available.
+
+**答案辅助判定模型** in Settings is off by default. Select the current tested model or another configured model to make at most one extra extraction call when local automatic extraction is unclear. The assistant receives the question and reply with known saved keys redacted, but no expected answer; it must return a complete literal answer and a quotation found in the reply. Comparison remains local. Evidence, model identity and auxiliary Token usage are shown in details. Explicit conflicts, uncertainty, unfinished expressions, failed requests, refusals, truncation and HTML do not trigger assistance. Cancelled auxiliary calls remain usage samples with unknown counters. Model assistance can itself be wrong; inspect the quoted evidence for disputed results.
+
+A mismatch describes these configured tests. It cannot establish a model's overall intelligence, identity, or whether a provider changed it. API calls, including enabled auxiliary extraction calls, may incur provider charges. No automatic retries are made.
 
 ## Data and Privacy
 
@@ -92,6 +97,7 @@ Build before running desktop scenarios. Run graphical checks sequentially:
 npm run build
 npm run test:desktop
 npm run test:usage
+npm run test:judgement
 npm run test:html
 npm run test:answers
 node scripts/desktop-boundary-qa.mjs

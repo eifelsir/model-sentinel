@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0 - 2026-10-15
+
+### Added
+
+- Optional answer extraction with the current or another configured model when local automatic extraction is unclear. Expected answers remain local; evidence, auxiliary model and usage are retained.
+- Per-model accounting for auxiliary requests and a desktop/restart regression scenario.
+
+### Changed
+
+- Text verdicts and floating history bars update before HTML generation completes. HTML is for human inspection and no longer changes text correctness.
+- Queued text requests take priority over queued HTML requests; active mixed rounds survive history bounds and restart recovery.
+
+### Fixed
+
+- The reported milk reply was rejected because a conditional height and an `is therefore` equation were treated as conflicting answer declarations.
+- Floating model badges could remain in the detecting state after text evaluation had finished.
+- Auxiliary extraction preserves explicit local conflicts and complete numeric boundaries, redacts known saved keys before forwarding a reply, and retains unknown usage for cancelled auxiliary calls.
+
 ## 1.1.0 - 2026-10-15
 
 ### Added

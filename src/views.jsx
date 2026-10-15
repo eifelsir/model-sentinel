@@ -1052,6 +1052,26 @@ export function SettingsPage({ state, mutate, busy, perform, api }) {
             <Settings2 size={17} />
             <h2>检测与运行</h2>
           </div>
+          <label className="setting-row">
+            <div>
+              <strong>答案辅助判定模型</strong>
+              <p>自动提取不明确时补充调用一次。会增加 Token 用量，固定答案仍在本地比对。</p>
+            </div>
+            <select
+              aria-label="答案辅助判定模型"
+              value={settings.answerJudgeTargetId || ""}
+              disabled={busy}
+              onChange={e => {
+                const value = e.target.value;
+                void mutate(c => { c.settings.answerJudgeTargetId = value; }).catch(() => {});
+              }}
+            >
+              <option value="">关闭</option>
+              <option value="@current">当前被测模型</option>
+              {settings.answerJudgeTargetId && settings.answerJudgeTargetId !== "@current" && !state.config.targets.some(t => t.id === settings.answerJudgeTargetId) && <option value={settings.answerJudgeTargetId} disabled>模型已移除，请重新选择</option>}
+              {state.config.targets.map(target => <option key={target.id} value={target.id}>{target.model} · {state.config.connections.find(c => c.id === target.connectionId)?.name}</option>)}
+            </select>
+          </label>
           <form
             className="setting-row"
             onSubmit={async (e) => {

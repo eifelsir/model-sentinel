@@ -3,7 +3,7 @@ import { builtinPrompts } from './builtins.mjs';
 
 export const PROTOCOLS = ['responses', 'chat', 'gemini', 'anthropic'];
 export function defaultConfig() {
-  return { version: 1, builtinsVersion: 1, connections: [], prompts: structuredClone(builtinPrompts), targets: [], settings: { concurrency: 4, autoRun: false, floatVisible: true, launchAtLogin: false } };
+  return { version: 1, builtinsVersion: 1, connections: [], prompts: structuredClone(builtinPrompts), targets: [], settings: { concurrency: 4, autoRun: false, floatVisible: true, launchAtLogin: false, answerJudgeTargetId: '' } };
 }
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
 function text(value, name, max = 100000) {
@@ -60,6 +60,7 @@ export function validateConfig(input) {
     return { id: t.id, connectionId: t.connectionId, model: text(t.model, 'model', 500), protocol: selectedProtocol, promptIds: [...t.promptIds], enabled: t.enabled !== false, intervalMinutes: range(t.intervalMinutes, 30, 0.001, 525600, 'interval'), timeoutSeconds: range(t.timeoutSeconds, 180, 0.01, 3600, 'timeout'), maxOutputTokens: t.maxOutputTokens == null ? null : range(t.maxOutputTokens, null, 1, 1000000, 'output tokens', true), reasoningEffort: validateReasoning(t, selectedProtocol || connection.protocol), extraBody: structuredClone(t.extraBody || {}) };
   });
   const settings = input.settings || {};
-  result.settings = { concurrency: range(settings.concurrency, 4, 1, 32, 'concurrency', true), autoRun: settings.autoRun === true, floatVisible: settings.floatVisible !== false, launchAtLogin: settings.launchAtLogin === true };
+  requireValue(settings.answerJudgeTargetId == null || (typeof settings.answerJudgeTargetId === 'string' && settings.answerJudgeTargetId.length <= 200), 'Invalid answer judge');
+  result.settings = { concurrency: range(settings.concurrency, 4, 1, 32, 'concurrency', true), autoRun: settings.autoRun === true, floatVisible: settings.floatVisible !== false, launchAtLogin: settings.launchAtLogin === true, answerJudgeTargetId: settings.answerJudgeTargetId || '' };
   return result;
 }

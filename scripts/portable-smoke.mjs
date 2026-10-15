@@ -9,6 +9,7 @@ import { createMockServer } from './mock-server.mjs';
 import { narrativeReply, verifyAnswerAndFloat } from './answer-float-checks.mjs';
 import { htmlReply, verifyHtmlAndFloat } from './html-float-checks.mjs';
 import { usageFixture, verifyUsage } from './usage-checks.mjs';
+import { judgementFixture, verifyJudgement } from './judgement-checks.mjs';
 
 async function freePort() {
   const server = createServer();
@@ -55,7 +56,8 @@ const { version } = JSON.parse(await readFile(new URL('../package.json', import.
 const executablePath = resolve(process.argv[2] || `release/Model-Sentinel-${version}-Windows-x64.exe`);
 const profile = await mkdtemp(join(tmpdir(), 'model-sentinel-portable-'));
 const port = await freePort(), inspectorPort = await freePort();
-const fixture = await createMockServer({ textForRequest: input => htmlReply(input) ?? narrativeReply(input), usageForRequest: usageFixture });
+const judgeGate = judgementFixture();
+const fixture = await createMockServer({ textForRequest: input => judgeGate.textForRequest(input) ?? htmlReply(input) ?? narrativeReply(input), usageForRequest: input => input.body.model === 'judge-model' || ['judge-source', 'judge-html-wait'].includes(input.body.input) ? { input_tokens: 10, output_tokens: 12 } : usageFixture(input), beforeReply: judgeGate.beforeReply });
 const checks = [], errors = [];
 let child, exited, browser, passed = false;
 function launch() {
@@ -136,9 +138,13 @@ try {
       many: resolve('artifacts/screenshots/16-portable-fixed-many.png'),
     },
   }));
+  checks.push(...await verifyJudgement(page, {
+    baseUrl: fixture.baseUrl, gate: judgeGate,
+    getFloating: async () => floating,
+    screenshotPrefix: resolve('artifacts/screenshots/portable-judgement'),
+  }));
   checks.push(...await verifyHtmlAndFloat(page, {
-    baseUrl: fixture.baseUrl,
-    requests: fixture.requests,
+    baseUrl: fixture.baseUrl, requests: fixture.requests,
     getFloating: async () => floating,
     screenshotPrefix: resolve('artifacts/screenshots/portable-html'),
   }));
@@ -175,6 +181,7 @@ try {
   await writeFile('artifacts/portable-results.json', JSON.stringify({ passed: false, executablePath, profile, checks, errors, error: error.stack }, null, 2));
   throw error;
 } finally {
+  judgeGate.release();
   if (!passed && child?.exitCode === null) {
     await quitThroughInspector(`http://127.0.0.1:${inspectorPort}/json/list`).catch(() => {});
     if (child.exitCode === null) child.kill();

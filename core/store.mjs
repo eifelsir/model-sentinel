@@ -3,17 +3,19 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { defaultConfig, validateConfig } from './config.mjs';
 import { HTML_LIMIT } from './html.mjs';
+import { roundStatus, roundPending } from './round.mjs';
 export function recoverHistory(history) {
   if (!Array.isArray(history)) throw new Error('Invalid stored history');
-  return history.map(round => round.status !== 'detecting' ? round : {
-    ...round, status: 'insufficient', completedAt: new Date().toISOString(),
-    results: (round.results || []).map(result => result.status === 'detecting' ? { ...result, status: 'insufficient', answer: '', reason: 'Interrupted by application restart' } : result),
+  return history.map(round => {
+    if (!roundPending(round)) return round;
+    const results = (round.results || []).map(result => result.status === 'detecting' ? { ...result, status: 'insufficient', answer: '', reason: 'Interrupted by application restart' } : result);
+    return { ...round, status: roundStatus(results), completedAt: new Date().toISOString(), results };
   });
 }
 export function boundedHistory(history) {
-  const running = history.filter(round => round.status === 'detecting');
-  const completed = history.filter(round => round.status !== 'detecting').slice(0, 1000);
-  return [...running, ...completed].map(round => round.status === 'detecting' ? round : ({
+  const running = history.filter(roundPending);
+  const completed = history.filter(round => !roundPending(round)).slice(0, 1000);
+  return [...running, ...completed].map(round => roundPending(round) ? round : ({
     ...round, results: (round.results || []).map(result => ({
       ...result, text: String(result.text || '').slice(0, 65536), answer: String(result.answer || '').slice(0, 10000), reason: String(result.reason || '').slice(0, 2000),
       ...(typeof result.html === 'string' ? { html: result.html.length <= HTML_LIMIT ? result.html : '' } : {}),

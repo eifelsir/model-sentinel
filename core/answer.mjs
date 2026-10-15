@@ -40,7 +40,7 @@ function trailingCandidate(line) {
 }
 const ambiguous = /(?:可能|也许|或者|或是|不确定|\b(?:maybe|perhaps|either|uncertain|possibly|might|could|may be)\b|(?:或|\bor\b)\s*[+-]?(?:\d|\.\d))/i;
 const marker = /(?:final answer|answer|result|最终答案|最后答案|答案|结果)\s*(?:is|是|为|[:：=]|(?:might|could|may)\s+be)\s*/gi;
-const quantityMarker = /(?:最(?:少|多)(?:(?:需要|需|要)\s*(?:取出|取|拿出|拿|抽出|抽|摸出|摸)?|取出|取|拿出|拿|抽出|抽|摸出|摸|为|是)|(?:the\s+)?(?:average|mean|minimum|maximum|total|final)\s+[\p{L} ]{1,60}?\s+(?:is|equals))\s*(.+)$/iu;
+const quantityMarker = /(?:最(?:少|多)(?:(?:需要|需|要)\s*(?:取出|取|拿出|拿|抽出|抽|摸出|摸)?|取出|取|拿出|拿|抽出|抽|摸出|摸|为|是)|(?:the\s+)?(?:average|mean|minimum|maximum|total|final)\s+[\p{L} ]{1,60}?\s+(?:is|equals)(?:\s+(?:therefore|thus|hence))?)\s*(.+)$/iu;
 const explanation = /[,，]\s*(?:because\b|since\b|accounting for\b|因为|由于)/i;
 const selfDoubt = /(?:\bI(?:\s+am|'m)\s+(?:not sure|uncertain|unsure)\b|我(?:仍然|仍)?(?:不确定|不能确定))/i;
 
@@ -73,17 +73,26 @@ function quantityText(value) {
     .replace(/\\[()[\]]|\$/g, ''))
     .replace(/[。.!]+$/, '').trim();
 }
+function boxedEquation(value) {
+  if (!/^(?:\\\[|\\\(|\$\$?)/.test(value)) return false;
+  const found = boxes(value);
+  if (!found?.length || !/(?:=|\\approx)\s*$/.test(value.slice(0, found.at(-1).index))) return false;
+  return /^[\s.,。]*$/.test(value.slice(found.at(-1).end).replace(/\\[)\]]|\$/g, ''));
+}
 function answerScope(clause, index) {
   const prefix = clause.slice(0, index);
   const start = Math.max(prefix.lastIndexOf(','), prefix.lastIndexOf('，')) + 1;
   if (/^(?:maybe\b|perhaps\b|possibly\b|可能|也许)/i.test(prefix)) return clause.split(explanation)[0];
   return clause.slice(start).split(explanation)[0];
 }
+export function stripQuantityUnit(value) {
+  return value.replace(/^\s*(?:颗|个|只|件|次|人|枚|本|条|厘米|毫米|千米|米|千克|克|秒|分钟|小时|岁|英寸|英尺|元|%|\b(?:inches|inch|feet|foot|cm|mm|km|m|kg|g|seconds?|minutes?|hours?|candies|items?|pieces?)\b)/i, '');
+}
 function numericCandidate(value) {
   const text = quantityText(value);
   const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?=$|[\s,，。;；.!?）)\]]|颗|个|只|件|次|人|枚|本|条|米|厘米|毫米|千米|克|千克|秒|分钟|小时|岁|英寸|英尺|元|%)/.exec(text);
   if (!match) return insufficient('Unable to extract a complete numeric answer');
-  const suffix = text.slice(match[0].length).replace(/^\s*(?:颗|个|只|件|次|人|枚|本|条|厘米|毫米|千米|米|千克|克|秒|分钟|小时|岁|英寸|英尺|元|%|\b(?:inches|inch|feet|foot|cm|mm|km|m|kg|g|seconds?|minutes?|hours?|candies|items?)\b)/i, '');
+  const suffix = stripQuantityUnit(text.slice(match[0].length));
   if (/^\s*(?:[+\-*/^=×÷]|\\(?:times|div|frac|cdot)\b)/.test(suffix)) return insufficient('Unresolved numeric expression');
   if (/^\s*(?:[/,，]|\band\b|和|与)?\s*[+-]?(?:\d|\.\d)/i.test(suffix)) return insufficient('Multiple numeric answers');
   if (suffix.trim() && !/^[.,。!?）)\]]+$/.test(suffix.trim()) && explanation.exec(suffix.trim())?.index !== 0 && !/^\s*(?:because\b|since\b|因为|由于)/i.test(suffix)) {
@@ -124,8 +133,10 @@ export function evaluateAnswer(text, test = {}) {
     for (const [index, match] of declarations.entries()) {
       markers.push({ raw: line.slice(match.index + match[0].length, declarations[index + 1]?.index), scope: answerScope(line, match.index) });
     }
-    const match = !declarations.length && wantsNumber ? quantityMarker.exec(line) : null;
-    if (match) markers.push({ raw: match[1], scope: answerScope(line, match.index) });
+    const alternateBranch = /^otherwise\b/i.test(line);
+    const match = !declarations.length && wantsNumber && !alternateBranch ? quantityMarker.exec(line) : null;
+    // A boxed result already supplies the answer to its surrounding equation.
+    if (match && !boxedEquation(match[1])) markers.push({ raw: match[1], scope: answerScope(line, match.index) });
     const correction = markers.length && (
       /(?:^|[,，]\s*)(?:(?:but|however)\s+)?(?:actually\b|correction\b|rather\b|instead\b|不对|更正)\s*[:,，]?\s*(.+)$/i.exec(line)
       || (wantsNumber && /^(?:(?:but|however)[,，]?\s+)?(?:it|that|this)\s+(?:is|should be|must be|equals)\s+([+-]?(?:\d|\.\d).*)$/i.exec(line))

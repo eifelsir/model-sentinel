@@ -287,10 +287,10 @@ function Floating({ state, api, perform, error }) {
   }));
   const count = (status) =>
     latest.filter((item) => item.round?.status === status).length;
-  const overall = state.activeTargetIds.length
-    ? "detecting"
-    : count("degraded")
+  const overall = count("degraded")
       ? "degraded"
+      : count("detecting")
+        ? "detecting"
       : count("insufficient")
         ? "insufficient"
         : latest.length &&
@@ -365,7 +365,7 @@ function Floating({ state, api, perform, error }) {
                     <span className="float-compact-identity">
                       <strong title={`${target.model}\n${connection?.name || ""} · ${protocolNames[target.protocol || connection?.protocol]}`}>{target.model}</strong>
                     </span>
-                    <Status status={state.activeTargetIds.includes(target.id) ? "detecting" : round?.status} />
+                    <Status status={round?.status} />
                   </span>
                   <span className="float-compact-meter"><HistoryBars rounds={rounds} compact /><UsageBrief round={round} compact /></span>
                   <TextAnswers round={round} compact />
@@ -414,7 +414,7 @@ function Floating({ state, api, perform, error }) {
                     </small>
                   </div>
                   <div className="float-result">
-                    <Status status={state.activeTargetIds.includes(target.id) ? "detecting" : round?.status} />
+                    <Status status={round?.status} />
                     <span title={answer}>
                       答案 <strong>{answer}</strong>
                     </span>
@@ -447,6 +447,7 @@ function Floating({ state, api, perform, error }) {
                 <HtmlGallery rounds={state.history.filter(r => r.targetId === target.id)} />
                 <div className="float-bottom">
                   <span>上次开始 {time(round?.startedAt, true)}</span>
+                  {round?.textCompletedAt && <span>文字完成 {time(round.textCompletedAt, true)}</span>}
                   <span>上次完成 {time(round?.completedAt, true)}</span>
                   {state.nextRuns[target.id] && (
                     <span>下次 {time(state.nextRuns[target.id])}</span>

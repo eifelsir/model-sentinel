@@ -26,6 +26,8 @@ jobs:
         run: npm run test:desktop
       - name: Token reporting and restart
         run: npm run test:usage
+      - name: Model-assisted extraction and early text verdicts
+        run: npm run test:judgement
       - name: HTML previews and restart
         run: npm run test:html
       - name: Answer extraction and floating window

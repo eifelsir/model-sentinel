@@ -4,7 +4,7 @@ import { mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defaultConfig, validateConfig } from '../core/config.mjs';
-import { Store } from '../core/store.mjs';
+import { Store, recoverHistory, boundedHistory } from '../core/store.mjs';
 
 test('a new profile includes the three built-in questions without altering the HTML prompt', () => {
   const config = defaultConfig();
@@ -38,6 +38,20 @@ test('HTML questions do not require fixed answers and old questions remain text 
   assert.equal(valid.prompts[1].expected, '');
   assert.throws(() => validateConfig({ ...config, prompts: [{ ...config.prompts[0], type: 'unknown' }] }));
   assert.throws(() => validateConfig({ ...config, prompts: [{ ...config.prompts[0], expected: '' }] }));
+});
+
+test('restart and history bounds preserve a text verdict with pending HTML', () => {
+  const round = {
+    id: 'partial', status: 'normal', startedAt: new Date().toISOString(), completedAt: null,
+    results: [{ type: 'text', promptId: 'p', status: 'normal', answer: '21' }, { type: 'html', promptId: 'h', status: 'detecting' }],
+  };
+  const older = Array.from({ length: 1001 }, (_, i) => ({ id: `old-${i}`, status: 'normal', results: [] }));
+  assert.equal(boundedHistory([...older, round]).some(r => r.id === 'partial'), true);
+  const recovered = recoverHistory([round])[0];
+  assert.equal(recovered.status, 'normal');
+  assert.equal(recovered.results[0].answer, '21');
+  assert.equal(recovered.results[1].status, 'insufficient');
+  assert.ok(recovered.completedAt);
 });
 
 test('configuration and encrypted backup recover all models and questions after a missing primary file', async () => {

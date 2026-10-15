@@ -1,7 +1,7 @@
 {
   "name": "model-sentinel",
   "productName": "Model Sentinel",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Windows desktop monitor for model answer consistency, SVG generation and Token usage",
   "author": "Eifel",
   "homepage": "https://github.com/eifelsir/model-sentinel",
@@ -24,6 +24,7 @@
     "package": "npm run build && electron-builder --win portable --x64",
     "test:desktop": "node scripts/desktop-qa.mjs",
     "test:usage": "node scripts/usage-qa.mjs",
+    "test:judgement": "node scripts/judgement-qa.mjs",
     "test:html": "node scripts/html-float-qa.mjs",
     "test:answers": "node scripts/answer-float-qa.mjs"
   },

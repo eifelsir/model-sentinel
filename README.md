@@ -1,0 +1,125 @@
+# Model Sentinel
+
+[![Windows CI](https://github.com/eifelsir/model-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/eifelsir/model-sentinel/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/eifelsir/model-sentinel)](https://github.com/eifelsir/model-sentinel/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+A Windows desktop monitor for model answer consistency, HTML/SVG generation, and Token usage. Connect your own endpoints and keys, run repeatable questions across models, and keep the results visible in a compact desktop widget.
+
+**[中文说明](README.zh-CN.md) · [Download for Windows x64](https://github.com/eifelsir/model-sentinel/releases/latest) · [Report a bug](https://github.com/eifelsir/model-sentinel/issues/new/choose)**
+
+The interface is currently in Simplified Chinese. No hosted account or additional judging model is required.
+
+## Features
+
+- **Multiple endpoints and models.** Responses API, Chat Completions, Gemini native, and Claude Messages; model discovery and manual IDs. OpenAI, Grok, Gemini, Claude, and compatible intermediary services.
+- **Repeatable questions.** Several questions per model, local answer extraction and comparison, concurrent requests, configurable intervals, and manual or automatic runs.
+- **Visible results.** Compact always-on-top window with model names, history bars, text answers, and per-round Token totals; expand for the latest 60 rounds.
+- **HTML/SVG tests.** Generate a complete SVG animation page. Browse the most recent eight rounds as real thumbnails and open an interactive, isolated preview.
+- **Token accounting.** Per-question and per-round input/output totals, available cache/reasoning details, and per-model totals across retained history. Missing or partial reporting is explicitly labeled.
+- **Model settings.** Provider-aware reasoning choices, output limits, timeouts, per-model question selection, and advanced request JSON.
+- **Local persistence.** Atomic configuration saves, encrypted keys, a backup copy, and key-free JSON export.
+- **Built-in questions.** Milk and candy reasoning questions, plus an editable HTML/SVG bicycle animation prompt.
+
+## Screenshots
+
+![Expanded desktop widget with history and HTML previews](docs/images/floating-preview.png)
+
+![Token usage by model](docs/images/token-usage.png)
+
+Screenshots use local test responses. They illustrate the application, not a benchmark of the named providers.
+
+## Quick Start
+
+1. Download `Model-Sentinel-1.1.0-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
+2. Select a built-in question or create one with a prompt and expected answer. Choose the HTML/SVG type for page-generation questions.
+3. Add a connection with its **Base URL**, **KEY**, and **protocol**. Fetch the model list or enter a model ID.
+4. Assign questions to each model and start detection. Enable automatic detection for recurring checks.
+
+Close the main window to keep monitoring from the system tray. Use **退出** in the tray menu to quit. Click the compact widget to expand it; drag its title bar to move it.
+
+When upgrading, exit the previous version from its tray before opening the new executable. Existing configuration is reused. The version and actual data folder are shown in Settings.
+
+## Protocols
+
+| Service | Common Base URL | Protocol |
+| --- | --- | --- |
+| OpenAI | `https://api.openai.com/v1` | Responses / Chat Completions |
+| Grok | `https://api.x.ai/v1` | Chat Completions / Responses |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta` | Gemini native |
+| Claude | `https://api.anthropic.com/v1` | Claude Messages |
+| Compatible services | Your provider's endpoint | Select the protocol it supports |
+
+Model discovery and available models depend on your provider and account. Custom URL prefixes are preserved. Reasoning controls are offered for verified model/protocol combinations; unknown IDs use the service default and can use advanced JSON. See [reasoning support](docs/reasoning-support.md).
+
+## What Results Mean
+
+| Result | Meaning |
+| --- | --- |
+| 正常 / Normal | Every text answer matched and all selected HTML outputs were complete. |
+| 降智 / Mismatch | At least one explicit extracted answer differed from the configured answer. |
+| 结果不足 / Insufficient | No explicit mismatch, but a request failed, timed out, was refused/truncated, or lacked an unambiguous result. |
+| 已生成 / Generated | An HTML-only round returned complete HTML containing SVG. This does not grade visual quality. |
+
+Expected answers stay local. Prompts are sent unchanged. The automatic extractor ignores structured reasoning, supports quantity conclusions and boxed answers, and preserves uncertainty or contradictory conclusions as insufficient. Exact and regex modes are also available.
+
+A mismatch describes these configured tests. It cannot establish a model's overall intelligence, identity, or whether a provider changed it. API calls may incur charges from your provider. No hidden retries or extra LLM judging calls are made.
+
+## Data and Privacy
+
+- Normal data directory: `%APPDATA%/Model Sentinel`.
+- Keys are encrypted with Electron `safeStorage` using the Windows account. An encrypted backup is written with the main state.
+- Configuration and history remain local. The application sends prompts and authentication only to the configured endpoints.
+- Exports omit stored keys. Response text, questions, and generated pages remain in history, so inspect exports before sharing them.
+- HTML previews use an isolated sandbox with application/Node access, network fetches, popups, forms, and external navigation restricted. External page assets are not loaded.
+- Retain up to 1,000 completed rounds, plus active rounds. Token summaries cover these retained records, not lifetime billing. Old records without usage remain unknown. See [Token accounting](docs/token-usage.md).
+
+Keep the application running for scheduled checks. Detection pauses while the computer is asleep or the app is closed. A Windows account change or a move to another computer can require re-entering keys.
+
+## Development
+
+Requirements: Windows x64 and Node.js 24 LTS. The source uses Electron, React, Vite, Lucide, and parse5.
+
+```powershell
+npm ci
+npm test
+npm run start
+```
+
+Build before running desktop scenarios. Run graphical checks sequentially:
+
+```powershell
+npm run build
+npm run test:desktop
+npm run test:usage
+npm run test:html
+npm run test:answers
+node scripts/desktop-boundary-qa.mjs
+node scripts/desktop-regressions.mjs
+```
+
+Tests use isolated temporary profiles and local HTTP fixtures. They do not need paid API credentials or modify your normal saved configuration.
+
+Create a portable Windows executable:
+
+```powershell
+npm run package
+node scripts/packaged-smoke.mjs
+node scripts/portable-smoke.mjs
+```
+
+If a runtime download is unavailable, package using the matching Electron already installed by `npm ci`:
+
+```powershell
+npm exec electron-builder -- --win portable --x64 --config.electronDist=node_modules/electron/dist
+```
+
+Release files go to `release/`; local reports and screenshots go to `artifacts/`. CI runs the core and desktop scenarios on Windows. Portable executables are currently unsigned.
+
+## Contributing
+
+Bug reports and focused improvements are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [SECURITY.md](SECURITY.md) for security reports. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## License
+
+[MIT](LICENSE) © 2026 Eifel.

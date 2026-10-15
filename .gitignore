@@ -1,0 +1,15 @@
+node_modules/
+dist/
+release/
+.superpowers/
+artifacts/
+docs/superpowers/
+*.log
+.env*
+!.env.example
+.DS_Store
+Thumbs.db
+*.pem
+*.key
+state*.json
+window.json

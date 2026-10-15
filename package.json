@@ -1,0 +1,66 @@
+{
+  "name": "model-sentinel",
+  "productName": "Model Sentinel",
+  "version": "1.1.0",
+  "description": "Windows desktop monitor for model answer consistency, SVG generation and Token usage",
+  "author": "Eifel",
+  "homepage": "https://github.com/eifelsir/model-sentinel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eifelsir/model-sentinel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eifelsir/model-sentinel/issues"
+  },
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "dev": "vite --host 127.0.0.1",
+    "package": "npm run build && electron-builder --win portable --x64",
+    "test:desktop": "node scripts/desktop-qa.mjs",
+    "test:usage": "node scripts/usage-qa.mjs",
+    "test:html": "node scripts/html-float-qa.mjs",
+    "test:answers": "node scripts/answer-float-qa.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "1.57.0",
+    "parse5": "8.0.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3",
+    "vite": "8.3.4"
+  },
+  "build": {
+    "appId": "local.model-sentinel.desktop",
+    "productName": "Model Sentinel",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "core/**/*",
+      "assets/**/*",
+      "LICENSE",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false,
+      "icon": "assets/app.ico"
+    },
+    "portable": {
+      "artifactName": "Model-Sentinel-${version}-Windows-x64.exe"
+    }
+  }
+}

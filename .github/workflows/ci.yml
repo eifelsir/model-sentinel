@@ -1,0 +1,42 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Desktop workflows and restart
+        run: npm run test:desktop
+      - name: Token reporting and restart
+        run: npm run test:usage
+      - name: HTML previews and restart
+        run: npm run test:html
+      - name: Answer extraction and floating window
+        run: npm run test:answers
+      - name: Configuration boundaries
+        run: node scripts/desktop-boundary-qa.mjs
+      - name: Regression scenarios
+        run: node scripts/desktop-regressions.mjs
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: windows-verification
+          path: artifacts/
+          retention-days: 7

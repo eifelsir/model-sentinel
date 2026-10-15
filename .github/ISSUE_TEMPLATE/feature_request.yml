@@ -1,0 +1,16 @@
+name: Feature request / 功能建议
+description: Suggest a focused improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What workflow should improve? / 想改进的使用场景
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Suggested behavior / 期望行为
+    validations:
+      required: true

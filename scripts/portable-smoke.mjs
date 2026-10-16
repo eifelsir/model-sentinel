@@ -90,15 +90,16 @@ try {
   expect((await page.evaluate(() => window.sentinel.getState())).appInfo.version).toBe(version);
   checks.push('exact portable executable extracts and opens a clean configuration');
   await mkdir('artifacts/screenshots', { recursive: true });
-  checks.push(...await verifyFloating(page, {
-    baseUrl: fixture.baseUrl,
-    getFloating: async () => context.pages().find(w => w.url().includes('view=float')),
-    screenshotPrefix: resolve('artifacts/screenshots/portable-floating'),
-  }));
+  // Check fixed usage totals before the other scenarios add retained history.
   checks.push(...await verifyUsage(page, {
     baseUrl: fixture.baseUrl,
     getFloating: async () => context.pages().find(w => w.url().includes('view=float')),
     screenshotPrefix: resolve('artifacts/screenshots/portable-token'),
+  }));
+  checks.push(...await verifyFloating(page, {
+    baseUrl: fixture.baseUrl,
+    getFloating: async () => context.pages().find(w => w.url().includes('view=float')),
+    screenshotPrefix: resolve('artifacts/screenshots/portable-floating'),
   }));
   checks.push(...await verifyCacheControls(page, {
     baseUrl: fixture.baseUrl, requests: fixture.requests, screenshot: resolve('artifacts/screenshots/portable-cache-toggle.png'),

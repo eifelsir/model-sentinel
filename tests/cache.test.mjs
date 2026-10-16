@@ -76,3 +76,29 @@ test('changing the cache switch during a round affects only later rounds, includ
     assert.deepEqual(engine.snapshot().history.map(round => round.bypassCache), [false, true]);
   } finally { release(); await engine.close(); await fixture.close(); }
 });
+
+test('bypass records retain the native strategy and returned cache reads for text and auxiliary requests', async () => {
+  let calls = 0;
+  const fixture = await createMockServer({
+    textForRequest: () => ++calls === 1 ? 'You need a grand total of 21 pieces.' : JSON.stringify({ answer: '21', evidence: 'a grand total of 21 pieces' }),
+    usageForRequest: () => ({ input_tokens: 100, output_tokens: 12, input_tokens_details: { cached_tokens: 50 } }),
+  });
+  const config = defaultConfig();
+  config.connections = [{ id: 'c', name: 'Local', baseUrl: fixture.baseUrl, protocol: 'responses' }];
+  config.prompts = [{ id: 'p', name: 'Text', prompt: 'question', expected: '21' }];
+  config.targets = [{ id: 't', connectionId: 'c', model: 'gpt-6.1-sol', promptIds: ['p'] }];
+  config.settings.bypassCache = true;
+  config.settings.answerJudgeTargetId = '@current';
+  const engine = new Engine({ config });
+  try {
+    await engine.run();
+    const result = engine.snapshot().history[0].results[0];
+    assert.equal(result.status, 'normal');
+    assert.equal(result.cacheBypass?.strategy, 'openai-explicit');
+    assert.equal(result.usage.cacheReadTokens, 50);
+    assert.equal(result.judgement.cacheBypass?.strategy, 'openai-explicit');
+    assert.equal(result.judgement.usage.cacheReadTokens, 50);
+    assert.equal(fixture.requests.length, 2);
+    for (const { body } of fixture.requests) assert.deepEqual(body.prompt_cache_options, { mode: 'explicit' });
+  } finally { await engine.close(); await fixture.close(); }
+});

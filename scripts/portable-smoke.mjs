@@ -10,7 +10,7 @@ import { narrativeReply, verifyAnswerAndFloat } from './answer-float-checks.mjs'
 import { htmlReply, verifyHtmlAndFloat } from './html-float-checks.mjs';
 import { usageFixture, verifyUsage } from './usage-checks.mjs';
 import { judgementFixture, verifyJudgement } from './judgement-checks.mjs';
-import { verifyCacheControls } from './cache-checks.mjs';
+import { cacheUsageFixture, verifyCacheControls } from './cache-checks.mjs';
 
 async function freePort() {
   const server = createServer();
@@ -58,7 +58,7 @@ const executablePath = resolve(process.argv[2] || `release/Model-Sentinel-${vers
 const profile = await mkdtemp(join(tmpdir(), 'model-sentinel-portable-'));
 const port = await freePort(), inspectorPort = await freePort();
 const judgeGate = judgementFixture();
-const fixture = await createMockServer({ textForRequest: input => judgeGate.textForRequest(input) ?? htmlReply(input) ?? narrativeReply(input), usageForRequest: input => input.body.model === 'judge-model' || ['judge-source', 'judge-html-wait'].includes(input.body.input) ? { input_tokens: 10, output_tokens: 12 } : usageFixture(input), beforeReply: judgeGate.beforeReply });
+const fixture = await createMockServer({ textForRequest: input => judgeGate.textForRequest(input) ?? htmlReply(input) ?? narrativeReply(input), usageForRequest: input => cacheUsageFixture(input) ?? (input.body.model === 'judge-model' || ['judge-source', 'judge-html-wait'].includes(input.body.input) ? { input_tokens: 10, output_tokens: 12 } : usageFixture(input)), beforeReply: judgeGate.beforeReply });
 const checks = [], errors = [];
 let child, exited, browser, passed = false;
 function launch() {

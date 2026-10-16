@@ -1179,7 +1179,7 @@ function CacheToggle({ settings, mutate, busy }) {
     <SettingToggle
       label="绕过缓存"
       description={<><span>提示词缓存通常不影响结果，不放心可开启绕过。</span><br /><span>整条回复缓存可能影响检测；绕过效果取决于服务商。</span></>}
-      title="从下一轮检测生效；每次加入随机标记，可能增加少量输入 Token"
+      title="从下一轮检测生效；支持的 OpenAI 模型请求原生禁用缓存，其他模型使用随机标记。服务返回的缓存读取量保存在检测详情中；绕过可能增加输入 Token"
       checked={settings.bypassCache}
       disabled={busy}
       onChange={value => {

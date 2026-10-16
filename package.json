@@ -1,7 +1,7 @@
 {
   "name": "model-sentinel",
   "productName": "Model Sentinel",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Windows desktop monitor for model answer consistency, SVG generation and Token usage",
   "author": "Eifel",
   "homepage": "https://github.com/eifelsir/model-sentinel",

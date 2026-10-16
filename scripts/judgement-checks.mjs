@@ -1,4 +1,6 @@
 import { expect } from '@playwright/test';
+import { contextualAnswers } from '../tests/fixtures/narrative-answers.mjs';
+import { builtinPrompts } from '../core/builtins.mjs';
 
 const promptFrom = body => body.input || body.messages?.[0]?.content || body.contents?.[0]?.parts?.[0]?.text || '';
 export function judgementFixture() {
@@ -8,9 +10,15 @@ export function judgementFixture() {
     release: () => release?.(),
     textForRequest: ({ body }) => {
       const prompt = promptFrom(body);
+      const sample = contextualAnswers.find(sample => builtinPrompts.find(p => p.id === sample.builtinId).prompt === prompt);
+      if (sample) return sample.text;
       if (prompt === 'judge-source') return 'You will need a grand total of **21 pieces** to guarantee it.';
       if (prompt === 'judge-html-wait') return 'No HTML was generated.';
-      if (prompt.startsWith('Extract the final answer from an existing model reply.')) return JSON.stringify({ answer: '21', evidence: 'a grand total of **21 pieces**' });
+      if (prompt.startsWith('Extract the final answer from an existing model reply.')) {
+        const payload = JSON.parse(prompt.split('\n').at(-1));
+        const sample = contextualAnswers.find(sample => sample.text === payload.reply);
+        return JSON.stringify(sample ? { answer: sample.expected, evidence: sample.evidence } : { answer: '21', evidence: 'a grand total of **21 pieces**' });
+      }
     },
   };
 }
@@ -77,5 +85,42 @@ export async function verifyJudgement(page, { baseUrl, gate, getFloating, screen
   checks.push('auxiliary usage is included once in round totals and attributed to the actual judging model');
   await page.getByRole('button', { name: '检测工作台', exact: true }).click();
   await page.evaluate(() => window.sentinel.expandFloat(false));
+  await page.evaluate(async questions => {
+    const { config } = await window.sentinel.getState();
+    config.prompts = questions;
+    config.targets[0].promptIds = questions.map(p => p.id);
+    await window.sentinel.saveConfig(config);
+    await window.sentinel.run(['tested']);
+  }, builtinPrompts.filter(p => p.type === 'text'));
+  await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).activeTargetIds.length).toBe(0);
+  let state = await page.evaluate(() => window.sentinel.getState());
+  expect(state.history[0].status).toBe('normal');
+  expect(state.history[0].results.map(result => result.answer)).toEqual(['46.24', '21']);
+  for (const result of state.history[0].results) expect(result.judgement.localReason).toBe('Context-dependent answer needs interpretation');
+  const floating = await getFloating();
+  await expect(floating.locator('.float-compact-row').first().locator('.float-compact-answers')).toContainText('46.24');
+  await expect(floating.locator('.float-compact-row').first().locator('.float-compact-answers')).toContainText('21');
+  await page.locator('.target-row').first().locator('.answer-link').click();
+  await expect(page.locator('.result-judgement').first()).toContainText('不同条件或题意');
+  await page.screenshot({ path: `${screenshotPrefix}-screenshot-replies.png` });
+  await page.getByRole('button', { name: '关闭详情', exact: true }).click();
+  checks.push('both screenshot replies use contextual auxiliary extraction and show 46.24 / 21 in the compact float');
+  await page.evaluate(async () => {
+    const { config } = await window.sentinel.getState();
+    config.prompts[1].expected = '22';
+    await window.sentinel.saveConfig(config);
+    await window.sentinel.run(['tested']);
+  });
+  await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).activeTargetIds.length).toBe(0);
+  state = await page.evaluate(() => window.sentinel.getState());
+  expect(state.history[0].status).toBe('degraded');
+  expect(state.history[0].results[1].answer).toBe('21');
+  await expect(floating.locator('.float-compact-row').first().locator('.status')).toHaveText('降智');
+  checks.push('a changed fixed answer produces degraded while preserving the literal extracted 21');
+  await page.evaluate(async () => {
+    const { config } = await window.sentinel.getState();
+    config.prompts.find(prompt => prompt.id === 'builtin-candy').expected = '21';
+    await window.sentinel.saveConfig(config);
+  });
   return checks;
 }

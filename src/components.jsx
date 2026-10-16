@@ -69,6 +69,7 @@ export function reasonText(reason) {
     "Multiple numeric answers": "回复包含多个数值答案",
     "Unresolved numeric expression": "回复包含尚未计算完成的数值表达式",
     "Contradictory final answers": "回复中的最终答案互相矛盾",
+    "Context-dependent answer needs interpretation": "回复涉及不同条件或题意，需结合原题提取答案",
     "Unable to extract an unambiguous final answer": "无法提取明确的最终答案",
     "Regex execution timed out": "提取表达式执行超时",
     "Regex worker failed": "提取表达式执行失败",
@@ -246,12 +247,14 @@ export function RoundDetail({ round, onClose }) {
             </div>
           </div>}
           <p className="result-reason">{reasonText(result.reason)}</p>
+          <CacheReport result={result} />
           <UsageBreakdown values={[result.usage]} />
           {result.judgement && <div className="result-judgement">
             <h4>模型辅助提取 · {result.judgement.model}</h4>
             <p>{result.judgement.connectionName} · {protocolNames[result.judgement.protocol]}</p>
             <p>本地提取：{reasonText(result.judgement.localReason)}</p>
             {result.judgement.evidence && <pre className="raw-text">{result.judgement.evidence}</pre>}
+            <CacheReport result={result.judgement} />
             <UsageBreakdown values={[result.judgement.usage]} />
             <details><summary>辅助模型回复</summary><pre className="raw-text">{result.judgement.text || "未收到最终回复"}</pre></details>
           </div>}
@@ -265,6 +268,23 @@ export function RoundDetail({ round, onClose }) {
       ))}
     </Modal>
   );
+}
+function CacheReport({ result }) {
+  const strategy = result.cacheBypass?.strategy;
+  if (!strategy) return null;
+  const read = result.usage?.cacheReadTokens;
+  const reported = Number.isSafeInteger(read) && read >= 0;
+  const hit = reported && read > 0;
+  const labels = {
+    "openai-explicit": "已请求原生禁用提示词缓存",
+    "anthropic-no-breakpoints": "已移除显式缓存配置并请求绕过",
+    "random-prefix": "已发送随机前缀与缓存绕过请求头",
+  };
+  return <div className={`cache-report${hit ? " cache-reported" : ""}`}>
+    <p>{labels[strategy] || "已请求绕过缓存"}</p>
+    <p>{hit ? `服务仍报告读取缓存 ${read.toLocaleString("zh-CN")} Token` : reported ? `服务返回缓存读取 ${read.toLocaleString("zh-CN")} Token` : "服务未返回缓存读取量"}</p>
+    {hit && <small>绕过请求未消除服务报告的缓存命中；输入缓存用量不能证明复用了整条回复。</small>}
+  </div>;
 }
 export function HistoryBars({ rounds, onOpen, compact = false }) {
   const ordered = [...rounds].slice(0, 60).reverse();

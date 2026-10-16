@@ -1382,6 +1382,24 @@ input[type="checkbox"][role="switch"]:checked:before {
   padding: 12px 0;
   border-top: 1px solid var(--border);
 }
+.cache-report {
+  margin: 10px 0;
+  padding-left: 10px;
+  border-left: 2px solid #65947b;
+  color: #4f655c;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.cache-report p {
+  margin: 4px 0;
+}
+.cache-report.cache-reported {
+  border-left-color: #c89d3e;
+  color: #866314;
+}
+.cache-report small {
+  font-size: 12px;
+}
 .result-judgement p {
   font-size: 11px;
   color: var(--muted);

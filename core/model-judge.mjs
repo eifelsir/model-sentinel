@@ -3,6 +3,7 @@ import { normalizeUsage } from './usage.mjs';
 
 const eligibleReasons = new Set([
   'Unable to extract a complete numeric answer', 'Unable to extract an unambiguous final answer',
+  'Context-dependent answer needs interpretation',
 ]);
 
 export function needsModelJudge(result, test) {
@@ -49,11 +50,13 @@ export async function judgeWithModel({ text, test, connection, target, request, 
       'Return only JSON with exactly two fields: {"answer":"literal answer without units","evidence":"exact quotation from the reply"}.',
       'Copy a short exact quotation that states the conclusion. The answer must occur literally inside that quotation.',
       'If there is no clear answer, it is uncertain, or conclusions contradict each other, return {"answer":null,"evidence":""}.',
+      'Use the original question to distinguish its conclusion from background quantities and answers to different hypothetical interpretations. Those alone are not contradictory final conclusions.',
       'Do not pick a number merely because it appears in the reasoning. Do not correct, calculate, or invent the answer.',
       JSON.stringify({ question: test.prompt, reply: text }),
     ].join('\n');
     const response = await request(connection, { ...target, extraBody: {}, reasoningEffort: '', maxOutputTokens: 2048 }, { prompt }, { signal, bypassCache });
     judgement.usage = normalizeUsage(response?.usage, judgement.protocol);
+    if (response?.cacheBypass) judgement.cacheBypass = response.cacheBypass;
     judgement.text = typeof response?.text === 'string' ? response.text.slice(0, 12000) : '';
     if (response?.incomplete || signal?.aborted) throw new Error();
     let raw = judgement.text.trim();

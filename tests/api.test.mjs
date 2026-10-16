@@ -251,3 +251,60 @@ test('Anthropic cache bypass removes system and tool breakpoints without alterin
   assert.deepEqual(received[1].tools[0].input_schema, extraBody.tools[0].input_schema);
   assert.equal(extraBody.system[0].cache_control.type, 'ephemeral');
 });
+
+for (const protocol of ['responses', 'chat']) {
+  test(`${protocol} supported OpenAI models request explicit caching with no breakpoints when bypass is enabled`, async () => {
+    const received = [];
+    const extraBody = {
+      prompt_cache_options: { mode: 'auto', retention: '24h' }, prompt_cache_key: 'shared',
+      tools: [{ type: 'function', name: 'tool', prompt_cache_breakpoint: { type: 'ephemeral' }, parameters: { type: 'object', properties: { prompt_cache_breakpoint: { type: 'string' } } } }],
+    };
+    await fixture(async (req, res) => {
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      received.push(JSON.parse(raw));
+      res.end(JSON.stringify(responses[protocol]));
+    }, async baseUrl => {
+      for (const model of ['gpt-5.6-sol', 'gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-sol-2026-10-01']) {
+        const result = await runPrompt({ baseUrl, provider: 'openai', protocol }, { model, extraBody }, { prompt: 'question' }, { bypassCache: true });
+        assert.equal(result.incomplete, false);
+        assert.equal(result.cacheBypass?.strategy, 'openai-explicit');
+      }
+    });
+    assert.equal(received.length, 4);
+    for (const body of received) {
+      assert.deepEqual(body.prompt_cache_options, { mode: 'explicit' });
+      assert.equal(body.prompt_cache_key, undefined);
+      assert.equal(body.tools[0].prompt_cache_breakpoint, undefined);
+      assert.deepEqual(body.tools[0].parameters, extraBody.tools[0].parameters);
+    }
+    assert.equal(extraBody.prompt_cache_options.mode, 'auto');
+    assert.ok(extraBody.tools[0].prompt_cache_breakpoint);
+  });
+}
+
+test('older or unrelated models keep generic bypass without unsupported OpenAI cache options', async () => {
+  const received = [];
+  await fixture(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    received.push(JSON.parse(raw));
+    res.end(JSON.stringify(responses.chat));
+  }, async baseUrl => {
+    for (const model of ['gpt-5.4', 'grok-4.6', 'model-x']) {
+      const result = await runPrompt({ baseUrl, protocol: 'chat' }, { model }, { prompt: 'question' }, { bypassCache: true });
+      assert.equal(result.cacheBypass?.strategy, 'random-prefix');
+    }
+  });
+  for (const body of received) assert.equal(body.prompt_cache_options, undefined);
+});
+
+test('a proxy rejecting native cache control is not silently retried without bypass', async () => {
+  let calls = 0;
+  await fixture((req, res) => { calls++; res.statusCode = 400; res.end('untrusted error with secret'); }, async baseUrl => {
+    const result = await runPrompt({ baseUrl, protocol: 'responses' }, { model: 'gpt-6.1-sol' }, { prompt: 'question' }, { bypassCache: true });
+    assert.equal(result.incomplete, true);
+    assert.equal(result.reason, 'HTTP 400');
+    assert.equal(result.cacheBypass?.strategy, 'openai-explicit');
+    assert.equal(calls, 1);
+    assert.equal(JSON.stringify(result).includes('secret'), false);
+  });
+});

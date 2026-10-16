@@ -97,3 +97,23 @@ The average heights without and with milk are \(42\) and \(54\) inches, respecti
 故答案为 \(\boxed{21\text{ 个}}\)。`,
   },
 ];
+
+export const contextualAnswers = [
+  {
+    builtinId: 'builtin-milk', name: 'milk screenshot with conditional background height',
+    expected: '46.24', evidence: 'The average adult height is **46.24 inches**.',
+    text: String.raw`The average adult height is **46.24 inches**. Let \(q\) be the frequency of allele 0. Under Hardy–Weinberg equilibrium, \[ q^2=\frac12 \quad\Rightarrow\quad q=\frac{1}{\sqrt2}. \] An individual gets the height benefit from milk only if their father can digest lactose (and therefore provides milk) and they themselves can digest it. Half of fathers have genotype \(0/0\), and half of offspring have genotype \(0/0\). These events are correlated: if the father is \(0/0\), his offspring will also be \(0/0\) whenever the mother transmits allele 0, which has probability \(q\). Thus, \[ P(\text{father }0/0,\ \text{offspring }0/0)=\frac12q. \] By inclusion–exclusion, the fraction of offspring who can digest milk and have a father who provides it is \[ 1-\frac12-\frac12+\frac12q =\frac{1}{2\sqrt2} \approx0.353553. \] Without usable milk, average height is 42 inches; with usable milk, it is 54 inches. Therefore, \[ \overline H =42+12\left(\frac{1}{2\sqrt2}\right) =46.2426407\dots \approx \boxed{46.24\text{ inches}}. \]`,
+  },
+  {
+    builtinId: 'builtin-candy', name: 'candy screenshot with a different hypothetical interpretation',
+    expected: '21', evidence: '但按题目特意说明的手感辨形条件，应取 **21 个**。',
+    text: String.raw`最少取出 **21 个**。这里利用了题目给出的条件：**可以凭手感辨别形状，因此可以按形状选择取出的糖果。** 具体方法是取出 **9 个圆形糖和 12 个五角星形糖**：
+- 圆形西瓜味只有 8 个，因此 9 个圆形糖中，至少有一个是苹果味或桃子味。
+- 五角星形中，非苹果味共 \(6+4=10\) 个，所以取出 12 个必有苹果味；非桃子味共 \(7+4=11\) 个，所以也必有桃子味。
+因此，无论这个圆形糖中出现的是苹果味还是桃子味，都能与五角星形糖中另一种口味配对。
+**为什么 20 个不能保证？** 设取出圆形 \(r\) 个、五角星形 \(s\) 个，且 \(r+s\le20\)。
+- 若 \(r\le8\)，圆形糖可能全是西瓜味；若 \(s\le4\)，五角星形糖可能全是西瓜味。这两种情况都无法保证配对。
+- 否则 \(r\ge9,\ s\ge5\)。于是 \(r\le15,\ s\le11\)。而两种形状的“苹果味 + 西瓜味”共有 \(7+8=15\) 个，五角星形的“苹果味 + 西瓜味”共有 \(7+4=11\) 个，所以取出的糖果仍可能完全没有桃子味。
+故最少为 \(\boxed{21}\) 个。如果题意是**不允许按形状挑选，只能直接随机取出若干个**，则答案为 29 个；但按题目特意说明的手感辨形条件，应取 **21 个**。`,
+  },
+];

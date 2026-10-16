@@ -3,11 +3,11 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createMockServer } from './mock-server.mjs';
-import { verifyCacheControls } from './cache-checks.mjs';
+import { cacheUsageFixture, verifyCacheControls } from './cache-checks.mjs';
 
 const profile = await mkdtemp(join(tmpdir(), 'model-sentinel-cache-'));
 await mkdir('artifacts/screenshots', { recursive: true });
-const fixture = await createMockServer();
+const fixture = await createMockServer({ usageForRequest: cacheUsageFixture });
 const errors = [], checks = [];
 let app;
 try {

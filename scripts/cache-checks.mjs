@@ -1,6 +1,12 @@
 import { expect } from '@playwright/test';
 
 const promptIn = body => body.input || body.messages?.[0]?.content || body.contents?.[0]?.parts?.[0]?.text;
+export function cacheUsageFixture({ body, path }) {
+  if (body.model !== 'gpt-6.1-sol' || !promptIn(body)?.endsWith('cache-fixture')) return;
+  return path.endsWith('/responses')
+    ? { input_tokens: 100, output_tokens: 12, input_tokens_details: { cached_tokens: 25 } }
+    : { prompt_tokens: 100, completion_tokens: 12, prompt_tokens_details: { cached_tokens: 0 } };
+}
 export async function verifyCacheControls(page, { baseUrl, requests, screenshot }) {
   const checks = [];
   async function run() {
@@ -70,6 +76,31 @@ export async function verifyCacheControls(page, { baseUrl, requests, screenshot 
   checks.push('workbench and Settings switches stay synchronized and disabling restores the original request');
   await control.click();
   await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).config.settings.bypassCache).toBe(true);
+  await page.evaluate(async () => {
+    const { config } = await window.sentinel.getState();
+    for (const target of config.targets.filter(target => ['responses', 'chat'].includes(target.protocol))) target.model = 'gpt-6.1-sol';
+    await window.sentinel.saveConfig(config);
+  });
+  start = requests.length;
+  await run();
+  const nativeRequests = requests.slice(start).filter(request => ['responses', 'chat'].some(protocol => request.path.endsWith(protocol === 'responses' ? '/responses' : '/chat/completions')));
+  expect(nativeRequests).toHaveLength(2);
+  for (const { body } of nativeRequests) expect(body.prompt_cache_options).toEqual({ mode: 'explicit' });
+  state = await page.evaluate(() => window.sentinel.getState());
+  const responsesRound = state.history.find(round => round.targetId === 'cache-responses');
+  expect(responsesRound.results[0].cacheBypass.strategy).toBe('openai-explicit');
+  expect(responsesRound.results[0].usage.cacheReadTokens).toBe(25);
+  await page.evaluate(id => window.sentinel.openMain(id), responsesRound.id);
+  const dialog = page.getByRole('dialog', { name: '检测详情' });
+  await expect(dialog.locator('.cache-report')).toContainText('已请求原生禁用提示词缓存');
+  await expect(dialog.locator('.cache-report')).toContainText('服务仍报告读取缓存 25 Token');
+  if (screenshot) await page.screenshot({ path: screenshot.replace(/\.png$/, '-native.png') });
+  await page.getByRole('button', { name: '关闭详情', exact: true }).click();
+  const chatRound = state.history.find(round => round.targetId === 'cache-chat');
+  await page.evaluate(id => window.sentinel.openMain(id), chatRound.id);
+  await expect(dialog.locator('.cache-report')).toContainText('服务返回缓存读取 0 Token');
+  await page.getByRole('button', { name: '关闭详情', exact: true }).click();
+  checks.push('supported OpenAI models send native cache control and details distinguish nonzero cache reads from zero');
   if (screenshot) await page.screenshot({ path: screenshot });
   return checks;
 }

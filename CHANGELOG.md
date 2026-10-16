@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.2 - 2026-10-16
+
+### Fixed
+
+- The reported milk and candy replies were classified as contradictory final answers, preventing the configured auxiliary model from running. Conditional background values and alternative interpretations now request context-aware extraction using the original question, while unconditional contradictions remain insufficient.
+- Cache bypass now also requests native explicit mode without breakpoints on recognized, supported OpenAI model families for Responses and Chat Completions. The previous random prefix and HTTP directives alone could leave automatic input caching enabled.
+
+### Added
+
+- Per-request bypass strategy and reported cache-read counts in result details, including auxiliary calls. Nonzero counts remain visible after requesting bypass; absent counters are not treated as zero.
+- Screenshot-reply regressions across all four protocols, negative verdict checks, native-cache request checks, and desktop/portable replay scenarios.
+
 ## 1.2.1 - 2026-10-15
 
 ### Added

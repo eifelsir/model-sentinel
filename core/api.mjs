@@ -49,12 +49,23 @@ function sanitizeExtra(value) {
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['expected', 'pattern'].includes(key)).map(([key, entry]) => [key, sanitizeExtra(entry)]));
 }
+function bypassStrategy(protocol, model) {
+  // Explicit mode without breakpoints skips reads and writes on these supported OpenAI families.
+  if (['responses', 'chat'].includes(protocol) && /^gpt-(?:5\.6(?:-(?:sol|terra|luna))?|6(?:\.\d+)?-(?:astra|sol|luna))(?:-\d{4}-\d{2}-\d{2})?$/i.test(model.replace(/^models\//, ''))) return 'openai-explicit';
+  return protocol === 'anthropic' ? 'anthropic-no-breakpoints' : 'random-prefix';
+}
 function requestBody(protocol, target, test, connection, bypassCache = false) {
   const extra = sanitizeExtra(target.extraBody || {});
   // Never allow auxiliary options to replace user input or inject local judge data.
   for (const key of ['expected', 'pattern', 'mode', 'prompt', 'input', 'messages', 'contents', 'model', 'stream', 'stream_options', 'max_tokens', 'max_completion_tokens', 'max_output_tokens']) delete extra[key];
   if (bypassCache) {
-    for (const key of ['cache', 'cache_control', 'cachedContent', 'prompt_cache_key', 'prompt_cache_retention', 'prompt_cache_options']) delete extra[key];
+    for (const key of ['cache', 'cache_control', 'cachedContent', 'prompt_cache_key', 'prompt_cache_retention', 'prompt_cache_options', 'prompt_cache_breakpoint']) delete extra[key];
+    if (bypassStrategy(protocol, target.model) === 'openai-explicit') {
+      extra.prompt_cache_options = { mode: 'explicit' };
+      for (const tool of Array.isArray(extra.tools) ? extra.tools : []) {
+        if (tool && typeof tool === 'object') delete tool.prompt_cache_breakpoint;
+      }
+    }
     if (protocol === 'anthropic') {
       for (const key of ['system', 'tools']) {
         for (const block of Array.isArray(extra[key]) ? extra[key] : []) {
@@ -104,12 +115,13 @@ function parseResponse(data, protocol) {
 export async function runPrompt(connection, target, test, { signal, bypassCache = false } = {}) {
   const timeout = AbortSignal.timeout(Math.max(1, Math.round((target.timeoutSeconds ?? 180) * 1000)));
   const bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const protocol = target.protocol || connection.protocol;
+  const cacheDetails = bypassCache ? { cacheBypass: { strategy: bypassStrategy(protocol, target.model) } } : {};
   try {
-    const protocol = target.protocol || connection.protocol;
     const model = target.model.replace(/^models\//, '');
     const data = await fetchJSON(endpoint(connection, protocol, 'run', model), { method: 'POST', headers: headers(connection, protocol, bypassCache), body: JSON.stringify(requestBody(protocol, target, test, connection, bypassCache)) }, bounded);
-    return parseResponse(data, protocol);
-  } catch (error) { return { text: '', incomplete: true, reason: errorReason(error, bounded), usage: null }; }
+    return { ...parseResponse(data, protocol), ...cacheDetails };
+  } catch (error) { return { text: '', incomplete: true, reason: errorReason(error, bounded), usage: null, ...cacheDetails }; }
 }
 export async function listModels(connection, { signal } = {}) {
   const timeout = AbortSignal.timeout(30000);

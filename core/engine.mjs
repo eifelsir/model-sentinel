@@ -110,6 +110,7 @@ export class Engine extends EventEmitter {
       const text = fullText.slice(0, 65536);
       result.text = text;
       result.usage = normalizeUsage(response?.usage, context.round.protocol);
+      if (response?.cacheBypass) result.cacheBypass = response.cacheBypass;
       if (signal.aborted) throw new Error('cancelled');
       let judged = response?.incomplete ? { status: 'insufficient', answer: '', reason: response.reason || 'Response did not complete' } : await Promise.race([this.judge(fullText, context.tests[index]), cancelled]);
       if (!response?.incomplete && context.modelJudge && needsModelJudge(judged, context.tests[index])) {

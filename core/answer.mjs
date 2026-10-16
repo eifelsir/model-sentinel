@@ -42,7 +42,8 @@ const ambiguous = /(?:可能|也许|或者|或是|不确定|\b(?:maybe|perhaps|e
 const marker = /(?:final answer|answer|result|最终答案|最后答案|答案|结果)\s*(?:is|是|为|[:：=]|(?:might|could|may)\s+be)\s*/gi;
 const quantityMarker = /(?:最(?:少|多)(?:(?:需要|需|要)\s*(?:取出|取|拿出|拿|抽出|抽|摸出|摸)?|取出|取|拿出|拿|抽出|抽|摸出|摸|为|是)|(?:the\s+)?(?:average|mean|minimum|maximum|total|final)\s+[\p{L} ]{1,60}?\s+(?:is|equals)(?:\s+(?:therefore|thus|hence))?)\s*(.+)$/iu;
 const explanation = /[,，]\s*(?:because\b|since\b|accounting for\b|因为|由于)/i;
-const selfDoubt = /(?:\bI(?:\s+am|'m)\s+(?:not sure|uncertain|unsure)\b|我(?:仍然|仍)?(?:不确定|不能确定))/i;
+const selfDoubt = /(?:\b(?:I(?:\s+am|'m)|(?:it|this|that|the\s+(?:final\s+)?(?:answer|result|conclusion))\s+(?:is|remains))\s+(?:not sure|not certain|uncertain|unsure)\b|我(?:仍然|仍)?(?:不确定|不能确定)|(?:答案|结果|结论)(?:仍然|仍|并)?不(?:确定|明确))/i;
+const conditionPrefix = /^(?:\\[)\]]\s*)?(with|without)\s+([^,，]{1,80})[,，]/i;
 
 function boxes(text) {
   const values = [], pattern = /\\boxed\s*\{/g;
@@ -85,6 +86,15 @@ function answerScope(clause, index) {
   if (/^(?:maybe\b|perhaps\b|possibly\b|可能|也许)/i.test(prefix)) return clause.split(explanation)[0];
   return clause.slice(start).split(explanation)[0];
 }
+function answerCandidate(raw, line, index, pairedContexts) {
+  const prefix = line.slice(0, index);
+  // Keep conditional quantities for interpretation; never silently discard a conflicting number.
+  const computational = /\b(?:calculat\w*|round\w*|arithmetic|simplif\w*|correct(?:ly)?|precision)\b|计算|四舍五入|取整|精度/i.test(prefix);
+  const condition = conditionPrefix.exec(prefix);
+  const paired = condition && pairedContexts.has(condition[2].trim().toLowerCase());
+  const contextual = !computational && (paired || /\b(?:if|unless|assuming|otherwise|provided that)\b|如果|假如|假设|若|倘若|没有.{0,20}时|有.{0,20}时/i.test(prefix));
+  return { raw, scope: answerScope(line, index), contextual };
+}
 export function stripQuantityUnit(value) {
   return value.replace(/^\s*(?:颗|个|只|件|次|人|枚|本|条|厘米|毫米|千米|米|千克|克|秒|分钟|小时|岁|英寸|英尺|元|%|\b(?:inches|inch|feet|foot|cm|mm|km|m|kg|g|seconds?|minutes?|hours?|candies|items?|pieces?)\b)/i, '');
 }
@@ -119,24 +129,34 @@ export function evaluateAnswer(text, test = {}) {
   const wantsNumber = numeric(normalize(expected)) !== null;
   if (!wantsNumber && ambiguous.test(clean)) return insufficient('Ambiguous answer');
   const lines = clean.split(/\r?\n|[;；]|(?<=[。!?！？])|(?<=\.)\s+/).map(line => normalize(line)).filter(Boolean);
+  const conditionVariants = new Map();
+  for (const line of lines) {
+    const match = conditionPrefix.exec(line);
+    if (!match) continue;
+    const key = match[2].trim().toLowerCase();
+    if (!conditionVariants.has(key)) conditionVariants.set(key, new Set());
+    conditionVariants.get(key).add(match[1].toLowerCase());
+  }
+  // Bare "with confidence" or "without a doubt" is not evidence of a different scenario.
+  const pairedContexts = new Set([...conditionVariants].filter(([, variants]) => variants.size === 2).map(([key]) => key));
   const markers = [];
   for (const line of lines) {
     if (selfDoubt.test(line)) return insufficient('Ambiguous answer');
     const found = boxes(line);
     if (!found) return insufficient('Unable to extract an unambiguous final answer');
-    for (const box of found) markers.push({ raw: box.value, scope: answerScope(line, box.index) });
+    for (const box of found) markers.push(answerCandidate(box.value, line, box.index, pairedContexts));
     const declarations = [];
     for (const match of line.matchAll(marker)) {
       if (declarations.length >= 64) return insufficient('Unable to extract an unambiguous final answer');
       declarations.push(match);
     }
     for (const [index, match] of declarations.entries()) {
-      markers.push({ raw: line.slice(match.index + match[0].length, declarations[index + 1]?.index), scope: answerScope(line, match.index) });
+      markers.push(answerCandidate(line.slice(match.index + match[0].length, declarations[index + 1]?.index), line, match.index, pairedContexts));
     }
     const alternateBranch = /^otherwise\b/i.test(line);
     const match = !declarations.length && wantsNumber && !alternateBranch ? quantityMarker.exec(line) : null;
     // A boxed result already supplies the answer to its surrounding equation.
-    if (match && !boxedEquation(match[1])) markers.push({ raw: match[1], scope: answerScope(line, match.index) });
+    if (match && !boxedEquation(match[1])) markers.push(answerCandidate(match[1], line, match.index, pairedContexts));
     const correction = markers.length && (
       /(?:^|[,，]\s*)(?:(?:but|however)\s+)?(?:actually\b|correction\b|rather\b|instead\b|不对|更正)\s*[:,，]?\s*(.+)$/i.exec(line)
       || (wantsNumber && /^(?:(?:but|however)[,，]?\s+)?(?:it|that|this)\s+(?:is|should be|must be|equals)\s+([+-]?(?:\d|\.\d).*)$/i.exec(line))
@@ -157,13 +177,19 @@ export function evaluateAnswer(text, test = {}) {
     if (wantsNumber) {
       const parsed = numericCandidate(candidate.raw);
       if (parsed.status) return parsed;
-      answers.push(parsed.answer);
+      answers.push({ value: parsed.answer, contextual: candidate.contextual });
     } else {
-      answers.push(quantityText(candidate.raw));
+      answers.push({ value: quantityText(candidate.raw), contextual: candidate.contextual });
     }
   }
-  if (new Set(answers.map(v => numeric(v) ?? v)).size > 1) return insufficient('Contradictory final answers');
-  if (answers.length) return compare(answers.at(-1), expected);
+  const distinct = values => new Set(values.map(({ value }) => numeric(value) ?? value)).size;
+  if (distinct(answers) > 1) {
+    if (distinct(answers.filter(answer => !answer.contextual)) <= 1 && answers.some(answer => answer.contextual)) {
+      return insufficient('Context-dependent answer needs interpretation');
+    }
+    return insufficient('Contradictory final answers');
+  }
+  if (answers.length) return compare(answers.at(-1).value, expected);
   if (ambiguous.test(clean)) return insufficient('Ambiguous answer');
   const correction = /不是[\s\S]+[，,]\s*(?:而?是)\s*(.+)$/.exec(clean);
   if (correction) return compare(correction[1].replace(/[。.!]+$/, ''), expected);

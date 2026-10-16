@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('sentinel', {
   openMain: roundId => invoke('openMain', roundId),
   exportData: () => invoke('exportData'),
   htmlThumbnail: (roundId, index) => invoke('htmlThumbnail', roundId, index),
+  openHtml: (roundId, index) => invoke('openHtml', roundId, index),
   onState: callback => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('sentinel:state', listener);

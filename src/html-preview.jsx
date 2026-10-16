@@ -36,7 +36,7 @@ function Thumbnail({ round, index, name }) {
   );
 }
 
-export function HtmlGallery({ rounds }) {
+export function HtmlGallery({ rounds, onOpen }) {
   const [selection, setSelection] = useState(null);
   const entries = rounds.filter(round => round.results.some(result => result.type === "html")).slice(0, 8);
   const selected = entries.find(round => round.id === selection?.roundId);
@@ -60,7 +60,10 @@ export function HtmlGallery({ rounds }) {
               aria-label={`查看 HTML 第 ${position + 1} 轮`}
               aria-expanded={selected?.id === round.id}
               title={`${clock} · ${failed ? detecting ? "生成中" : "未生成完整页面" : "查看完整页面"}`}
-              onClick={() => setSelection(selected?.id === round.id ? null : { roundId: round.id, index: failed ? round.results.findIndex(result => result.type === "html") : index })}
+              onClick={() => {
+                setSelection(selected?.id === round.id && !onOpen ? null : { roundId: round.id, index: failed ? round.results.findIndex(result => result.type === "html") : index });
+                if (!failed && onOpen) onOpen(round.id, index);
+              }}
             >
               {failed ? <span className="html-thumbnail html-unavailable">{detecting ? <LoaderCircle size={17} className="spin" /> : <CodeXml size={19} />}<small>{detecting ? "生成中" : "未生成"}</small></span> : <Thumbnail round={round} index={index} name={round.results[index].promptName} />}
               <time>{clock}</time>
@@ -73,12 +76,15 @@ export function HtmlGallery({ rounds }) {
           <header>
             {htmlResults.length > 1 ? (
               <div className="html-tabs" role="tablist" aria-label="本轮 HTML 题目">
-                {htmlResults.map(({ result, index }) => <button type="button" role="tab" aria-selected={selection.index === index} key={index} onClick={() => setSelection({ roundId: selected.id, index })}>{result.promptName}</button>)}
+                {htmlResults.map(({ result, index }) => <button type="button" role="tab" aria-selected={selection.index === index} key={index} onClick={() => {
+                  setSelection({ roundId: selected.id, index });
+                  if (result.html && onOpen) onOpen(selected.id, index);
+                }}>{result.promptName}</button>)}
               </div>
             ) : <strong>{current?.promptName}</strong>}
             <button className="icon-button" type="button" title="收起 HTML 页面" aria-label="收起 HTML 页面" onClick={() => setSelection(null)}><X size={16} /></button>
           </header>
-          {current?.html ? <HtmlPage key={`${selected.id}-${selection.index}`} roundId={selected.id} index={selection.index} title={current.promptName} /> : <p className="html-page-empty">{current?.status === "detecting" ? "正在生成…" : "未收到完整的 SVG HTML 页面"}</p>}
+          {current?.html ? !onOpen && <HtmlPage key={`${selected.id}-${selection.index}`} roundId={selected.id} index={selection.index} title={current.promptName} /> : <p className="html-page-empty">{current?.status === "detecting" ? "正在生成…" : "未收到完整的 SVG HTML 页面"}</p>}
         </div>
       )}
     </section>

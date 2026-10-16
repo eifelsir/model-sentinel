@@ -70,6 +70,8 @@ export function reasonText(reason) {
     "Unresolved numeric expression": "回复包含尚未计算完成的数值表达式",
     "Contradictory final answers": "回复中的最终答案互相矛盾",
     "Context-dependent answer needs interpretation": "回复涉及不同条件或题意，需结合原题提取答案",
+    "Model judge evidence was not found in the reply": "辅助模型引用的结论与原回复不符",
+    "Model judge answer is not supported by its evidence": "辅助模型给出的答案不是引文中的完整数值",
     "Unable to extract an unambiguous final answer": "无法提取明确的最终答案",
     "Regex execution timed out": "提取表达式执行超时",
     "Regex worker failed": "提取表达式执行失败",

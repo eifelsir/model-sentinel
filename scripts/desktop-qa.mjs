@@ -134,7 +134,8 @@ try {
   await floating.screenshot({
     path: join(screenshots, "04-float-expanded.png"),
   });
-  expect(await floating.evaluate(() => innerWidth)).toBeGreaterThan(600);
+  expect(await floating.evaluate(() => innerWidth)).toBeGreaterThanOrEqual(360);
+  expect(await floating.evaluate(() => innerWidth)).toBeLessThan(550);
   for (let repeat = 0; repeat < 2; repeat++) {
     await floating.locator(".history-bar").first().click();
     await expect(page.getByRole("dialog", { name: "检测详情" })).toBeVisible();

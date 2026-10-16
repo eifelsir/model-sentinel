@@ -32,6 +32,8 @@ jobs:
         run: npm run test:html
       - name: Answer extraction and floating window
         run: npm run test:answers
+      - name: Compact monitor, hover, pin and saved placement
+        run: npm run test:floating
       - name: Cache bypass controls and restart
         run: npm run test:cache
       - name: Configuration boundaries

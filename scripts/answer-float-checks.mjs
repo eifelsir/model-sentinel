@@ -83,7 +83,8 @@ export async function verifyAnswerAndFloat(page, { baseUrl, getFloating, screens
 
   await floating.getByRole('button', { name: '展开悬浮窗', exact: true }).click();
   await expect(floating.locator('.float-model-row')).toHaveCount(2);
-  await expect.poll(() => floating.evaluate(() => innerWidth)).toBeGreaterThan(600);
+  await expect.poll(() => floating.evaluate(() => innerWidth)).toBeGreaterThanOrEqual(360);
+  expect(await floating.evaluate(() => innerWidth)).toBeLessThan(550);
   for (const [index, connection] of ['主连接', '备用连接'].entries()) {
     const identity = floating.locator('.float-model-row').nth(index).locator('.model-identity');
     await expect(identity.locator('.float-connection-label')).toHaveText(connection);

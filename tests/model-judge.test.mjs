@@ -4,6 +4,7 @@ import { Engine } from '../core/engine.mjs';
 import { defaultConfig } from '../core/config.mjs';
 import { roundUsage, usageRecords } from '../core/usage.mjs';
 import { createMockServer } from '../scripts/mock-server.mjs';
+import { formattedEvidenceAnswer } from './fixtures/auxiliary-evidence.mjs';
 
 const source = 'You will need a grand total of **21 pieces** to guarantee it.';
 const extraction = JSON.stringify({ answer: '21', evidence: 'a grand total of **21 pieces**' });
@@ -40,6 +41,23 @@ for (const protocol of ['responses', 'chat', 'gemini', 'anthropic']) {
         assert.equal(result.judgement.usage.totalTokens, 22);
         assert.equal(roundUsage(round).totalTokens, 44);
       }
+    } finally { await engine.close(); await fixture.close(); }
+  });
+  test(`${protocol} preserves screenshot-style auxiliary evidence through HTTP and local comparison`, async () => {
+    const sample = formattedEvidenceAnswer;
+    const fixture = await createMockServer({
+      textForRequest: ({ body }) => promptFrom(body) === 'original-question'
+        ? sample.text : JSON.stringify({ answer: sample.expected, evidence: sample.evidence }),
+    });
+    const engine = new Engine({ config: configuration(fixture.baseUrl, protocol) });
+    try {
+      await engine.run();
+      const result = engine.snapshot().history[0].results[0];
+      assert.equal(result.status, 'normal');
+      assert.equal(result.answer, '21');
+      assert.equal(result.text, sample.text);
+      assert.equal(result.judgement.evidence, sample.evidence);
+      assert.equal(fixture.requests.length, 2);
     } finally { await engine.close(); await fixture.close(); }
   });
 }

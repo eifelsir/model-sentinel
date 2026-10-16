@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { HtmlPreview, parseAddress } = require('./html-preview.cjs');
+const { monitorBounds, snapPlacement } = require('./float-layout.cjs');
 
 const root = path.join(__dirname, '..');
 const profileArg = process.argv.find(a => a.startsWith('--profile='));
@@ -36,8 +37,8 @@ function broadcast() {
   if (!engine) return;
   const state = snapshot();
   if (floatWindow && !floatWindow.isDestroyed()) {
-    const bounds = floatWindow.getBounds(), desired = floatBounds(expanded);
-    if (bounds.width !== desired.width || bounds.height !== desired.height) floatWindow.setBounds(desired);
+    const bounds = floatWindow.getContentBounds(), desired = floatBounds(expanded);
+    if (bounds.width !== desired.width || bounds.height !== desired.height) floatWindow.setContentBounds(desired);
   }
   for (const win of [mainWindow, floatWindow]) if (win && !win.isDestroyed()) win.webContents.send('sentinel:state', state);
   updateTray();
@@ -86,11 +87,20 @@ async function showMain(roundId) {
 }
 function floatBounds(big) {
   const display = Number.isFinite(placement.x) && Number.isFinite(placement.y) ? screen.getDisplayNearestPoint({ x: placement.x, y: placement.y }) : screen.getPrimaryDisplay();
-  const area = display.workArea;
-  const width = Math.min(big ? 900 : 360, area.width);
-  const compactHeight = 85 + Math.min(engine?.config.targets.length || 0, 6) * 94;
-  const height = Math.min(big ? 680 : compactHeight, area.height);
-  return { width, height, x: Math.min(Math.max(placement.x ?? area.x + area.width - width - 24, area.x), area.x + area.width - width), y: Math.min(Math.max(placement.y ?? area.y + area.height - height - 24, area.y), area.y + area.height - height) };
+  return monitorBounds(display.workArea, placement, engine?.config.targets.length || 0, big);
+}
+function rememberFloat() {
+  clearTimeout(savePlacementTimer);
+  savePlacementTimer = setTimeout(() => {
+    if (!expanded && floatWindow && !floatWindow.isDestroyed()) {
+      const bounds = floatWindow.getBounds();
+      const area = screen.getDisplayMatching(bounds).workArea;
+      const snapped = snapPlacement(bounds, area);
+      placement = { ...placement, ...snapped };
+      if (snapped.x !== bounds.x || snapped.y !== bounds.y) floatWindow.setPosition(snapped.x, snapped.y);
+    }
+    void writePlacement();
+  }, 200);
 }
 async function writePlacement() {
   try {
@@ -104,13 +114,19 @@ async function showFloat(visible) {
   if (quitting) return;
   if (!visible) { floatWindow?.hide(); return; }
   if (!floatWindow || floatWindow.isDestroyed()) {
-    floatWindow = new BrowserWindow({ ...floatBounds(expanded), frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: true, alwaysOnTop: true, backgroundColor: '#ffffff', show: false, icon: iconPath, title: '模型检测 · 悬浮窗', webPreferences: options() });
+    floatWindow = new BrowserWindow({ ...floatBounds(expanded), useContentSize: true, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: true, alwaysOnTop: true, backgroundColor: '#ffffff', show: false, icon: iconPath, title: '模型检测 · 悬浮窗', webPreferences: options() });
     protect(floatWindow);
-    floatWindow.on('moved', () => {
+    floatWindow.on('move', () => {
       if (!expanded && floatWindow && !floatWindow.isDestroyed()) {
-        const bounds = floatWindow.getBounds(); placement = { x: bounds.x, y: bounds.y };
-        clearTimeout(savePlacementTimer); savePlacementTimer = setTimeout(writePlacement, 350);
+        const bounds = floatWindow.getBounds(); placement = { ...placement, x: bounds.x, y: bounds.y };
+        rememberFloat();
       }
+    });
+    floatWindow.on('resize', () => {
+      if (!expanded || !floatWindow || floatWindow.isDestroyed()) return;
+      const { width, height } = floatWindow.getContentBounds();
+      placement = { ...placement, detailWidth: width, detailHeight: height };
+      rememberFloat();
     });
     floatWindow.on('close', event => { if (!quitting) { event.preventDefault(); void changeFloat(false); } });
     await floatWindow.loadFile(path.join(root, 'dist', 'index.html'), { query: { view: 'float' } });
@@ -122,9 +138,13 @@ async function expandFloat(value) {
   if (quitting) return;
   if (typeof value !== 'boolean') throw new Error('Invalid floating window state');
   if (!floatWindow || floatWindow.isDestroyed()) await showFloat(true);
-  if (!expanded) { const { x, y } = floatWindow.getBounds(); placement = { x, y }; }
+  if (!expanded) { const { x, y } = floatWindow.getBounds(); placement = { ...placement, x, y }; }
+  const bounds = floatBounds(value);
   expanded = value;
-  floatWindow.setBounds(floatBounds(expanded));
+  if (!expanded) floatWindow.setMinimumSize(0, 0);
+  floatWindow.setContentBounds(bounds);
+  if (expanded) floatWindow.setMinimumSize(Math.min(360, bounds.width), Math.min(320, bounds.height));
+  floatWindow.setResizable(expanded);
   broadcast();
 }
 function queueConfig(work) {
@@ -215,6 +235,12 @@ function registerIpc() {
     return true;
   });
   handle('htmlThumbnail', (roundId, index) => htmlPreview.thumbnail(roundId, index));
+  handle('openHtml', (roundId, index) => {
+    const round = engine.history.find(round => round.id === roundId);
+    const result = Number.isInteger(index) && round?.results[index];
+    if (!result || result.type !== 'html' || result.status !== 'generated') throw new Error('HTML 页面不可用。');
+    return htmlPreview.open(roundId, index, `${round.connectionName} · ${round.model} · ${result.promptName}`);
+  });
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -252,7 +278,11 @@ else {
     const withBuiltins = includeBuiltinPrompts(data.config);
     if (withBuiltins !== data.config) { await store.save(withBuiltins, data.history); data.config = withBuiltins; }
     if (quitting) return;
-    try { const saved = JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'window.json'), 'utf8')); if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) placement = { x: saved.x, y: saved.y }; } catch {}
+    try {
+      const saved = JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'window.json'), 'utf8'));
+      if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) placement = { x: saved.x, y: saved.y };
+      for (const key of ['detailWidth', 'detailHeight']) if (Number.isFinite(saved[key]) && saved[key] > 0) placement[key] = saved[key];
+    } catch {}
     if (quitting) return;
     secretsFor(data.config);
     engine = new Engine({ ...data, persist: (config, history) => store.save(config, redact(history, secretsFor(config))) });
@@ -268,7 +298,7 @@ else {
     if (quitting) return;
     await showFloat(engine.config.settings.floatVisible);
     if (quitting) return;
-    screen.on('display-metrics-changed', () => { if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setBounds(floatBounds(expanded)); });
-    screen.on('display-removed', () => { if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setBounds(floatBounds(expanded)); });
+    screen.on('display-metrics-changed', () => { if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setContentBounds(floatBounds(expanded)); });
+    screen.on('display-removed', () => { if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setContentBounds(floatBounds(expanded)); });
   }).catch(error => { if (!quitting) { dialog.showErrorBox('模型检测无法启动', errorText(error)); app.quit(); } });
 }

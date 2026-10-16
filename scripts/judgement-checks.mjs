@@ -1,22 +1,24 @@
 import { expect } from '@playwright/test';
 import { contextualAnswers } from '../tests/fixtures/narrative-answers.mjs';
 import { builtinPrompts } from '../core/builtins.mjs';
+import { formattedEvidenceAnswer } from '../tests/fixtures/auxiliary-evidence.mjs';
 
 const promptFrom = body => body.input || body.messages?.[0]?.content || body.contents?.[0]?.parts?.[0]?.text || '';
 export function judgementFixture() {
   let release;
+  const samples = [contextualAnswers[0], formattedEvidenceAnswer];
   return {
     beforeReply: ({ body }) => promptFrom(body) === 'judge-html-wait' ? new Promise(resolve => { release = resolve; }) : undefined,
     release: () => release?.(),
     textForRequest: ({ body }) => {
       const prompt = promptFrom(body);
-      const sample = contextualAnswers.find(sample => builtinPrompts.find(p => p.id === sample.builtinId).prompt === prompt);
+      const sample = samples.find(sample => builtinPrompts.find(p => p.id === sample.builtinId).prompt === prompt);
       if (sample) return sample.text;
       if (prompt === 'judge-source') return 'You will need a grand total of **21 pieces** to guarantee it.';
       if (prompt === 'judge-html-wait') return 'No HTML was generated.';
       if (prompt.startsWith('Extract the final answer from an existing model reply.')) {
         const payload = JSON.parse(prompt.split('\n').at(-1));
-        const sample = contextualAnswers.find(sample => sample.text === payload.reply);
+        const sample = samples.find(sample => sample.text === payload.reply);
         return JSON.stringify(sample ? { answer: sample.expected, evidence: sample.evidence } : { answer: '21', evidence: 'a grand total of **21 pieces**' });
       }
     },
@@ -66,7 +68,7 @@ export async function verifyJudgement(page, { baseUrl, gate, getFloating, screen
     await page.getByRole('button', { name: '关闭详情', exact: true }).click();
     await floating.screenshot({ path: `${screenshotPrefix}-compact.png` });
     await floating.getByRole('button', { name: '展开悬浮窗', exact: true }).click();
-    await expect(floating.locator('.float-model-row').first().locator('.float-result .status')).toHaveText('正常');
+    await expect(floating.locator('.float-model-row').first().locator('.status')).toHaveText('正常');
     checks.push('text verdict, compact/expanded status and green history bar appear before pending HTML completes');
   } finally { gate.release(); await pending; }
   const after = await page.evaluate(() => window.sentinel.getState());
@@ -97,6 +99,7 @@ export async function verifyJudgement(page, { baseUrl, gate, getFloating, screen
   expect(state.history[0].status).toBe('normal');
   expect(state.history[0].results.map(result => result.answer)).toEqual(['46.24', '21']);
   for (const result of state.history[0].results) expect(result.judgement.localReason).toBe('Context-dependent answer needs interpretation');
+  expect(state.history[0].results[1].judgement.evidence).toBe(formattedEvidenceAnswer.evidence);
   const floating = await getFloating();
   await expect(floating.locator('.float-compact-row').first().locator('.float-compact-answers')).toContainText('46.24');
   await expect(floating.locator('.float-compact-row').first().locator('.float-compact-answers')).toContainText('21');
@@ -104,7 +107,7 @@ export async function verifyJudgement(page, { baseUrl, gate, getFloating, screen
   await expect(page.locator('.result-judgement').first()).toContainText('不同条件或题意');
   await page.screenshot({ path: `${screenshotPrefix}-screenshot-replies.png` });
   await page.getByRole('button', { name: '关闭详情', exact: true }).click();
-  checks.push('both screenshot replies use contextual auxiliary extraction and show 46.24 / 21 in the compact float');
+  checks.push('screenshot-style unclosed Markdown, LaTeX and escaped punctuation still produce normal with 46.24 / 21 visible in the compact float');
   await page.evaluate(async () => {
     const { config } = await window.sentinel.getState();
     config.prompts[1].expected = '22';

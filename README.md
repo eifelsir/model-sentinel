@@ -15,8 +15,8 @@ The interface is currently in Simplified Chinese. No hosted account or additiona
 - **Multiple endpoints and models.** Responses API, Chat Completions, Gemini native, and Claude Messages; model discovery and manual IDs. OpenAI, Grok, Gemini, Claude, and compatible intermediary services.
 - **Repeatable questions.** Several questions per model, local answer extraction and comparison, concurrent requests, configurable intervals, and manual or automatic runs.
 - **Optional model assistance.** When local automatic extraction is unclear, use the current model or another configured model once to extract an answer with a quotation. Expected answers stay local; auxiliary usage and evidence are recorded.
-- **Visible results.** Compact always-on-top window with connection and model names, history bars, text answers, and per-round Token totals; expand for the latest 60 rounds. Long connection and model names truncate separately, with full names on hover.
-- **HTML/SVG tests.** Generate a complete SVG animation page. Browse the most recent eight rounds as real thumbnails and open an interactive, isolated preview.
+- **Desktop monitor.** A narrow, traffic-monitor-style always-on-top window keeps connection/model names, verdicts, text answers, history bars and Token totals visible. Hover to inspect the list, click a model to pin its details, or use Escape to collapse. It snaps to screen edges and remembers position and detail size.
+- **HTML/SVG tests.** Generate a complete SVG animation page. Browse the selected model's most recent eight rounds as real thumbnails and open an interactive, isolated preview in a separate window.
 - **Token accounting.** Per-question and per-round input/output totals, available cache/reasoning details, and per-model totals across retained history. Missing or partial reporting is explicitly labeled.
 - **Model settings.** Provider-aware reasoning choices, output limits, timeouts, per-model question selection, and advanced request JSON.
 - **Optional cache bypass.** Saved switches in the workbench and Settings request fresh input with a per-request random prefix and cache directives across all four protocols, including HTML and auxiliary extraction.
@@ -25,7 +25,9 @@ The interface is currently in Simplified Chinese. No hosted account or additiona
 
 ## Screenshots
 
-![Expanded desktop widget with history and HTML previews](docs/images/floating-preview.png)
+![Compact desktop monitor](docs/images/floating-compact.png)
+
+![Pinned model details with history and HTML thumbnails](docs/images/floating-preview.png)
 
 ![Token usage by model](docs/images/token-usage.png)
 
@@ -33,12 +35,12 @@ Screenshots use local test responses. They illustrate the application, not a ben
 
 ## Quick Start
 
-1. Download `Model-Sentinel-1.2.1-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
+1. Download `Model-Sentinel-1.3.0-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
 2. Select a built-in question or create one with a prompt and expected answer. Choose the HTML/SVG type for page-generation questions.
 3. Add a connection with its **Base URL**, **KEY**, and **protocol**. Fetch the model list or enter a model ID.
 4. Assign questions to each model and start detection. Enable automatic detection for recurring checks.
 
-Close the main window to keep monitoring from the system tray. Use **退出** in the tray menu to quit. Click the compact widget to expand it; drag its title bar to move it.
+Close the main window to keep monitoring from the system tray. Use **退出** in the tray menu to quit. Drag the compact widget's title bar to move it; it snaps near screen edges. Hover over the body to expand the model list and move away to collapse. Click a model to keep its details open, or click the summary to pin the list. The header provides back, pin, collapse and main-window controls; Escape also collapses. Resize the expanded window as needed. HTML thumbnails open separately.
 
 When upgrading, exit the previous version from its tray before opening the new executable. Existing configuration is reused. The version and actual data folder are shown in Settings.
 
@@ -69,7 +71,7 @@ Expected answers stay local. Original test prompts are sent unchanged with cache
 
 **答案辅助判定模型** in Settings is off by default. Select the current tested model or another configured model to make at most one extra extraction call when local automatic extraction is unclear. This includes differing values tied to conditional background or hypothetical interpretations, such as the milk reply's background height and the candy reply's alternative random-draw answer. These values remain insufficient without assistance; the app does not silently discard a number or choose one because it matches the expected answer. Conflicting unconditional conclusions still do not trigger assistance.
 
-The assistant receives the original question and reply with known saved keys redacted, but no expected answer; it must return a complete literal answer and a quotation found in the reply. Comparison remains local. Evidence, model identity and auxiliary Token usage are shown in details. Explicit uncertainty, unfinished expressions, failed requests, refusals, truncation and HTML do not trigger assistance. Cancelled auxiliary calls remain usage samples with unknown counters. Model assistance can itself be wrong; inspect the quoted evidence for disputed results.
+The assistant receives the original question and reply with known saved keys redacted, but no expected answer; it must return a complete literal answer and a quotation found in the reply. Quotation matching tolerates Markdown, LaTeX presentation, whitespace and escaped punctuation differences while preserving numeric values, signs and arithmetic boundaries. Comparison remains local. Evidence, model identity and auxiliary Token usage are shown in details; rejected quotations have a specific explanation. Explicit uncertainty, unfinished expressions, failed requests, refusals, truncation and HTML do not trigger assistance. Cancelled auxiliary calls remain usage samples with unknown counters. Model assistance can itself be wrong; inspect the quoted evidence for disputed results.
 
 A mismatch describes these configured tests. It cannot establish a model's overall intelligence, identity, or whether a provider changed it. API calls, including enabled auxiliary extraction calls, may incur provider charges. No automatic retries are made.
 
@@ -115,6 +117,7 @@ npm run test:usage
 npm run test:judgement
 npm run test:html
 npm run test:answers
+npm run test:floating
 npm run test:cache
 node scripts/desktop-boundary-qa.mjs
 node scripts/desktop-regressions.mjs

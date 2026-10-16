@@ -36,6 +36,7 @@ class HtmlPreview {
     this.waiting = new Map();
     this.cache = new Map();
     this.windows = new Set();
+    this.viewers = new Map();
     this.closed = false;
     this.captureSession = session.fromPartition('sentinel-thumbnails');
     for (const ses of [session.defaultSession, this.captureSession]) {
@@ -102,10 +103,41 @@ class HtmlPreview {
       if (!win.isDestroyed()) win.destroy();
     }
   }
+  async open(roundId, index, title) {
+    if (this.closed || !this.artifact(roundId, index)) throw new Error('HTML unavailable');
+    const address = previewAddress(roundId, index);
+    const prior = this.viewers.get(address);
+    if (prior && !prior.isDestroyed()) {
+      if (prior.isMinimized()) prior.restore();
+      prior.show(); prior.focus();
+      return true;
+    }
+    if (this.viewers.size >= 8) this.viewers.values().next().value.close();
+    const win = new BrowserWindow({
+      width: 960, height: 680, minWidth: 400, minHeight: 300, show: false,
+      title, autoHideMenuBar: true,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
+    });
+    this.viewers.set(address, win);
+    win.on('closed', () => this.viewers.delete(address));
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', event => event.preventDefault());
+    win.webContents.on('will-frame-navigate', event => event.preventDefault());
+    try {
+      await win.loadURL(address);
+      if (!win.isDestroyed()) { win.setTitle(title); win.show(); }
+      return true;
+    } catch (error) {
+      if (!win.isDestroyed()) win.destroy();
+      throw error;
+    }
+  }
   close() {
     this.closed = true;
     for (const win of this.windows) if (!win.isDestroyed()) win.destroy();
     this.windows.clear();
+    for (const win of this.viewers.values()) if (!win.isDestroyed()) win.destroy();
+    this.viewers.clear();
     this.cache.clear();
   }
 }

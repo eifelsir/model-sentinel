@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.3.0 - 2026-10-16
+
+### Changed
+
+- Reworked the floating monitor into a narrow traffic-monitor-style window. Compact rows retain connection/model identity, verdict, text answers, history and Token totals; height is bounded with scrolling for additional models.
+- Hover opens the model list and leaving collapses it. Clicking a model pins its details; back, pin/unpin, collapse and Escape provide explicit controls.
+- HTML thumbnails open interactive pages in separate sandboxed windows, keeping the monitor compact. The selected model retains its latest eight rounds and multiple HTML question tabs.
+
+### Added
+
+- Screen-edge snapping and saved compact placement, plus resizable details with size restoration.
+- Evidence-format, four-protocol HTTP, floating interaction, native placement/restart and independent HTML preview regressions, including the portable executable.
+
+### Fixed
+
+- Auxiliary extraction could return the correct `21` but remain insufficient when its quotation differed only in Markdown emphasis, LaTeX presentation, whitespace or escaped punctuation.
+- Evidence matching retains full numeric boundaries, signs and arithmetic expressions, with more specific rejection reasons.
+- Native window size persistence uses content dimensions to avoid repeated size growth under Windows display scaling.
+- Hover expansion still collapses when native resizing clears the pointer hover state without delivering a leave event.
+
 ## 1.2.2 - 2026-10-16
 
 ### Fixed

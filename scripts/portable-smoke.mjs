@@ -11,6 +11,7 @@ import { htmlReply, verifyHtmlAndFloat } from './html-float-checks.mjs';
 import { usageFixture, verifyUsage } from './usage-checks.mjs';
 import { judgementFixture, verifyJudgement } from './judgement-checks.mjs';
 import { cacheUsageFixture, verifyCacheControls } from './cache-checks.mjs';
+import { verifyFloating } from './floating-checks.mjs';
 
 async function freePort() {
   const server = createServer();
@@ -89,6 +90,11 @@ try {
   expect((await page.evaluate(() => window.sentinel.getState())).appInfo.version).toBe(version);
   checks.push('exact portable executable extracts and opens a clean configuration');
   await mkdir('artifacts/screenshots', { recursive: true });
+  checks.push(...await verifyFloating(page, {
+    baseUrl: fixture.baseUrl,
+    getFloating: async () => context.pages().find(w => w.url().includes('view=float')),
+    screenshotPrefix: resolve('artifacts/screenshots/portable-floating'),
+  }));
   checks.push(...await verifyUsage(page, {
     baseUrl: fixture.baseUrl,
     getFloating: async () => context.pages().find(w => w.url().includes('view=float')),

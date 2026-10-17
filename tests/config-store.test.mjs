@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { defaultConfig, validateConfig } from '../core/config.mjs';
 import { Store, recoverHistory, boundedHistory } from '../core/store.mjs';
 
-test('a new profile includes the three built-in questions without altering the HTML prompt', () => {
+test('a new profile includes the built-in questions without altering the HTML prompt', () => {
   const config = defaultConfig();
   assert.equal(config.prompts.find(p => p.name === '牛奶题')?.expected, '46.24');
   assert.equal(config.prompts.find(p => p.name === '糖果题')?.expected, '21');

@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { HtmlPreview, parseAddress } = require('./html-preview.cjs');
-const { monitorBounds, snapPlacement } = require('./float-layout.cjs');
+const { monitorBounds, snapPlacement, dockEdge } = require('./float-layout.cjs');
 
 const root = path.join(__dirname, '..');
 const profileArg = process.argv.find(a => a.startsWith('--profile='));
@@ -11,6 +11,7 @@ app.setName('Model Sentinel');
 app.setPath('userData', profileArg ? path.resolve(profileArg.slice('--profile='.length)) : path.join(app.getPath('appData'), 'Model Sentinel'));
 let mainWindow, floatWindow, tray, engine, store, htmlPreview, quitting = false, exitReady = false;
 let expanded = false, placement = {}, savePlacementTimer, stateError = '', selectedRoundId = null, selectedRoundNonce = 0;
+let docked = false, adjustingFloat = false, appliedFloatBounds, floatLayoutKey;
 let configQueue = Promise.resolve();
 const knownSecrets = new Set();
 const iconPath = path.join(root, 'assets', 'app.png');
@@ -31,15 +32,12 @@ function snapshot() {
   state.config.connections = state.config.connections.map(({ apiKey, ...connection }) => ({ ...connection, hasKey: Boolean(apiKey) }));
   state.history = redact(state.history, secrets);
   for (const target of state.config.targets) target.extraBody = redact(target.extraBody, secrets);
-  return { ...state, error: stateError, floatExpanded: expanded, selectedRoundId, selectedRoundNonce, appInfo: { version: app.getVersion(), dataDirectory: app.getPath('userData') } };
+  return { ...state, error: stateError, floatExpanded: expanded, floatDocked: docked, floatEdge: placement.edge || null, selectedRoundId, selectedRoundNonce, appInfo: { version: app.getVersion(), dataDirectory: app.getPath('userData') } };
 }
 function broadcast() {
   if (!engine) return;
   const state = snapshot();
-  if (floatWindow && !floatWindow.isDestroyed()) {
-    const bounds = floatWindow.getContentBounds(), desired = floatBounds(expanded);
-    if (bounds.width !== desired.width || bounds.height !== desired.height) floatWindow.setContentBounds(desired);
-  }
+  applyFloatBounds();
   for (const win of [mainWindow, floatWindow]) if (win && !win.isDestroyed()) win.webContents.send('sentinel:state', state);
   updateTray();
 }
@@ -85,9 +83,37 @@ async function showMain(roundId) {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show(); mainWindow.focus(); broadcast();
 }
+function floatDisplay() {
+  return Number.isFinite(placement.x) && Number.isFinite(placement.y) ? screen.getDisplayNearestPoint({ x: placement.x, y: placement.y }) : screen.getPrimaryDisplay();
+}
 function floatBounds(big) {
-  const display = Number.isFinite(placement.x) && Number.isFinite(placement.y) ? screen.getDisplayNearestPoint({ x: placement.x, y: placement.y }) : screen.getPrimaryDisplay();
-  return monitorBounds(display.workArea, placement, engine?.config.targets.length || 0, big);
+  return monitorBounds(floatDisplay().workArea, placement, engine?.config.targets.length || 0, big, docked);
+}
+function sameFloatBounds(bounds) {
+  return appliedFloatBounds && ['x', 'y', 'width', 'height'].every(key => Math.abs(bounds[key] - appliedFloatBounds[key]) <= 2);
+}
+function applyFloatBounds(force = false) {
+  if (!floatWindow || floatWindow.isDestroyed()) return;
+  const bounds = floatBounds(expanded);
+  const key = JSON.stringify({ ...bounds, expanded });
+  if (!force && key === floatLayoutKey) return;
+  adjustingFloat = true;
+  try {
+    floatWindow.setMinimumSize(0, 0);
+    if (floatWindow.isResizable() !== expanded) floatWindow.setResizable(expanded);
+    // Position-only updates feed rounded native sizes back into Windows at fractional DPI.
+    floatWindow.setBounds(bounds);
+    if (expanded) floatWindow.setMinimumSize(Math.min(360, bounds.width), Math.min(320, bounds.height));
+    const actual = floatWindow.getBounds(), area = floatDisplay().workArea;
+    const x = Math.min(Math.max(actual.x, area.x), Math.max(area.x, area.x + area.width - actual.width));
+    const y = Math.min(Math.max(actual.y, area.y), Math.max(area.y, area.y + area.height - actual.height));
+    // Windows can enforce a minimum native size larger than the requested status strip.
+    if (Math.abs(x - actual.x) > 2 || Math.abs(y - actual.y) > 2) floatWindow.setBounds({ ...bounds, x, y });
+    appliedFloatBounds = floatWindow.getBounds();
+    floatLayoutKey = key;
+  } finally {
+    adjustingFloat = false;
+  }
 }
 function rememberFloat() {
   clearTimeout(savePlacementTimer);
@@ -96,8 +122,10 @@ function rememberFloat() {
       const bounds = floatWindow.getBounds();
       const area = screen.getDisplayMatching(bounds).workArea;
       const snapped = snapPlacement(bounds, area);
-      placement = { ...placement, ...snapped };
-      if (snapped.x !== bounds.x || snapped.y !== bounds.y) floatWindow.setPosition(snapped.x, snapped.y);
+      placement = { ...placement, ...snapped, edge: dockEdge({ ...bounds, ...snapped }, area) };
+      if (!placement.edge) docked = false;
+      applyFloatBounds(true);
+      broadcast();
     }
     void writePlacement();
   }, 200);
@@ -114,21 +142,30 @@ async function showFloat(visible) {
   if (quitting) return;
   if (!visible) { floatWindow?.hide(); return; }
   if (!floatWindow || floatWindow.isDestroyed()) {
-    floatWindow = new BrowserWindow({ ...floatBounds(expanded), useContentSize: true, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: true, alwaysOnTop: true, backgroundColor: '#ffffff', show: false, icon: iconPath, title: '模型检测 · 悬浮窗', webPreferences: options() });
+    floatWindow = new BrowserWindow({ ...floatBounds(expanded), frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: true, alwaysOnTop: true, backgroundColor: '#ffffff', show: false, icon: iconPath, title: '模型检测 · 悬浮窗', webPreferences: options() });
     protect(floatWindow);
     floatWindow.on('move', () => {
       if (!expanded && floatWindow && !floatWindow.isDestroyed()) {
-        const bounds = floatWindow.getBounds(); placement = { ...placement, x: bounds.x, y: bounds.y };
+        const bounds = floatWindow.getBounds();
+        if (adjustingFloat || sameFloatBounds(bounds)) return;
+        placement = { ...placement, x: bounds.x, y: bounds.y, edge: null };
+        docked = false;
         rememberFloat();
       }
     });
     floatWindow.on('resize', () => {
       if (!expanded || !floatWindow || floatWindow.isDestroyed()) return;
-      const { width, height } = floatWindow.getContentBounds();
+      if (adjustingFloat || sameFloatBounds(floatWindow.getBounds())) return;
+      const { width, height } = floatWindow.getBounds();
       placement = { ...placement, detailWidth: width, detailHeight: height };
+      appliedFloatBounds = floatWindow.getBounds();
+      const desired = floatBounds(expanded);
+      if (Math.abs(width - desired.width) > 2 || Math.abs(height - desired.height) > 2) applyFloatBounds(true);
+      else floatLayoutKey = JSON.stringify({ ...desired, expanded });
       rememberFloat();
     });
     floatWindow.on('close', event => { if (!quitting) { event.preventDefault(); void changeFloat(false); } });
+    applyFloatBounds(true);
     await floatWindow.loadFile(path.join(root, 'dist', 'index.html'), { query: { view: 'float' } });
   }
   if (quitting || floatWindow.isDestroyed()) return;
@@ -138,13 +175,15 @@ async function expandFloat(value) {
   if (quitting) return;
   if (typeof value !== 'boolean') throw new Error('Invalid floating window state');
   if (!floatWindow || floatWindow.isDestroyed()) await showFloat(true);
-  if (!expanded) { const { x, y } = floatWindow.getBounds(); placement = { ...placement, x, y }; }
-  const bounds = floatBounds(value);
   expanded = value;
-  if (!expanded) floatWindow.setMinimumSize(0, 0);
-  floatWindow.setContentBounds(bounds);
-  if (expanded) floatWindow.setMinimumSize(Math.min(360, bounds.width), Math.min(320, bounds.height));
-  floatWindow.setResizable(expanded);
+  docked = !expanded && Boolean(placement.edge);
+  broadcast();
+}
+async function revealFloat() {
+  if (quitting) return;
+  if (!floatWindow || floatWindow.isDestroyed()) await showFloat(true);
+  docked = false;
+  expanded = false;
   broadcast();
 }
 function queueConfig(work) {
@@ -224,6 +263,7 @@ function registerIpc() {
   handle('setAuto', changeAuto);
   handle('setFloatVisible', changeFloat);
   handle('expandFloat', expandFloat);
+  handle('revealFloat', revealFloat);
   handle('openMain', showMain);
   handle('exportData', async () => {
     const result = await dialog.showSaveDialog(mainWindow, { title: '导出检测数据', defaultPath: '模型检测数据.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
@@ -282,6 +322,8 @@ else {
       const saved = JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'window.json'), 'utf8'));
       if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) placement = { x: saved.x, y: saved.y };
       for (const key of ['detailWidth', 'detailHeight']) if (Number.isFinite(saved[key]) && saved[key] > 0) placement[key] = saved[key];
+      if (['left', 'right', 'top', 'bottom'].includes(saved.edge)) placement.edge = saved.edge;
+      docked = Boolean(placement.edge);
     } catch {}
     if (quitting) return;
     secretsFor(data.config);
@@ -298,7 +340,7 @@ else {
     if (quitting) return;
     await showFloat(engine.config.settings.floatVisible);
     if (quitting) return;
-    screen.on('display-metrics-changed', () => { if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setContentBounds(floatBounds(expanded)); });
-    screen.on('display-removed', () => { if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setContentBounds(floatBounds(expanded)); });
+    screen.on('display-metrics-changed', () => { applyFloatBounds(true); broadcast(); });
+    screen.on('display-removed', () => { applyFloatBounds(true); broadcast(); });
   }).catch(error => { if (!quitting) { dialog.showErrorBox('模型检测无法启动', errorText(error)); app.quit(); } });
 }

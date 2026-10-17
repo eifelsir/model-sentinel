@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('sentinel', {
   setAuto: enabled => invoke('setAuto', enabled),
   setFloatVisible: visible => invoke('setFloatVisible', visible),
   expandFloat: expanded => invoke('expandFloat', expanded),
+  revealFloat: () => invoke('revealFloat'),
   openMain: roundId => invoke('openMain', roundId),
   exportData: () => invoke('exportData'),
   htmlThumbnail: (roundId, index) => invoke('htmlThumbnail', roundId, index),

@@ -34,6 +34,12 @@ jobs:
         run: npm run test:answers
       - name: Compact monitor, hover, pin and saved placement
         run: npm run test:floating
+      - name: Edge docking, stable geometry and restart
+        run: npm run test:float-edge
+      - name: Edge docking at fractional display scale
+        env:
+          SENTINEL_TEST_SCALE: '1.25'
+        run: npm run test:float-edge
       - name: Cache bypass controls and restart
         run: npm run test:cache
       - name: Configuration boundaries

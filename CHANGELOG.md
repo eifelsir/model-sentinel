@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.2 - 2026-10-17
+
+### Added
+
+- Built-in combined candy/milk question with the saved answer `21和46.24`, preserving the question order and the user's answer-only instruction.
+- Versioned preset upgrades add the combined question to existing profiles without replacing edited questions, fixed answers or model assignments, and without duplicating an existing copy.
+
+### Changed
+
+- Built-in milk and candy questions now include the saved answer-only instructions, with fixed answers `46.24` and `21`. The HTML/SVG animation prompt is unchanged.
+- Includes the locally verified 1.3.1 edge auto-hide and fractional display scaling fixes.
+
+## 1.3.1 - 2026-10-16
+
+### Fixed
+
+- Screen-edge correction repeatedly moved the floating window using rounded native dimensions, causing gradual growth and drift at fractional Windows display scaling.
+- Programmatic moves and expansion no longer overwrite the saved compact position or detail size. Geometry updates use explicit position and size and run only when the intended layout changes.
+
+### Added
+
+- Edge auto-hide: leaving a docked monitor reduces it to a slim status strip; hovering restores the model list. Clicking a model keeps its details pinned, and dragging away restores the ordinary compact monitor.
+- Native minimum-size handling keeps the status strip inside the work area even when Windows enforces a larger window.
+- Persistent docking on all four work-area edges and native regressions for repeated updates, open/close cycles and restart at the active display scale.
+
 ## 1.3.0 - 2026-10-16
 
 ### Changed

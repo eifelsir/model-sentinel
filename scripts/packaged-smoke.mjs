@@ -3,10 +3,18 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { createMockServer } from './mock-server.mjs';
+import { defaultConfig } from '../core/config.mjs';
 
 const executablePath = resolve(process.argv[2] || 'release/win-unpacked/Model Sentinel.exe');
 const profile = await mkdtemp(join(tmpdir(), 'model-sentinel-package-'));
 const fixture = await createMockServer();
+const previousConfig = defaultConfig();
+previousConfig.builtinsVersion = 1;
+previousConfig.prompts = previousConfig.prompts.filter(prompt => prompt.id !== 'builtin-combined');
+previousConfig.prompts[0].expected = 'custom46';
+previousConfig.connections = [{ id: 'saved', name: 'Saved', baseUrl: fixture.baseUrl, protocol: 'responses' }];
+previousConfig.targets = [{ id: 'saved-target', connectionId: 'saved', model: 'saved-model', promptIds: ['builtin-milk'] }];
+await writeFile(join(profile, 'state.json'), JSON.stringify({ version: 1, config: previousConfig, history: [] }));
 await mkdir('artifacts/screenshots', { recursive: true });
 let app;
 try {
@@ -14,6 +22,12 @@ try {
   const page = await app.firstWindow();
   await page.waitForFunction(() => Boolean(window.sentinel));
   await expect(page.getByLabel('提示词', { exact: true })).toBeVisible();
+  const migrated = (await page.evaluate(() => window.sentinel.getState())).config;
+  expect(migrated.builtinsVersion).toBe(2);
+  expect(migrated.prompts).toHaveLength(4);
+  expect(migrated.prompts[0].expected).toBe('custom46');
+  expect(migrated.prompts.find(prompt => prompt.id === 'builtin-combined').expected).toBe('21和46.24');
+  expect(migrated.targets[0].promptIds).toEqual(['builtin-milk']);
   const key = 'package-test-secret';
   await page.evaluate(async ({ baseUrl, key }) => {
     const { config } = await window.sentinel.getState();
@@ -35,7 +49,13 @@ try {
   const data = await readFile(join(profile, 'state.json'), 'utf8');
   expect(data).not.toContain(key);
   expect(JSON.parse(data).config.settings.autoRun).toBe(true);
-  await writeFile('artifacts/packaged-results.json', JSON.stringify({ passed: true, executablePath, profile, checks: ['packaged startup', 'real HTTP Responses', 'regex worker inside asar', 'floating expansion', 'safeStorage encryption', 'shutdown preserves auto preference'] }, null, 2));
+  app = await electron.launch({ executablePath, args: [`--profile=${profile}`], timeout: 45000 });
+  const restarted = await app.firstWindow();
+  await expect(restarted.getByLabel('提示词', { exact: true })).toHaveValue('6*7?');
+  const restored = (await restarted.evaluate(() => window.sentinel.getState())).config;
+  expect(restored.builtinsVersion).toBe(2);
+  expect(restored.prompts.map(prompt => prompt.id)).toEqual(['p']);
+  await writeFile('artifacts/packaged-results.json', JSON.stringify({ passed: true, executablePath, profile, checks: ['packaged startup', 'version-one upgrade adds combined without changing existing answers or assignments', 'real HTTP Responses', 'regex worker inside asar', 'floating expansion', 'safeStorage encryption', 'shutdown preserves auto preference', 'restart preserves preset migration and does not restore deleted questions'] }, null, 2));
   console.log('Packaged smoke verification passed.');
 } finally {
   if (app) await app.close();

@@ -12,6 +12,7 @@ import { usageFixture, verifyUsage } from './usage-checks.mjs';
 import { judgementFixture, verifyJudgement } from './judgement-checks.mjs';
 import { cacheUsageFixture, verifyCacheControls } from './cache-checks.mjs';
 import { verifyFloating } from './floating-checks.mjs';
+import { verifyBuiltinEditor } from './builtin-checks.mjs';
 
 async function freePort() {
   const server = createServer();
@@ -28,23 +29,23 @@ async function waitJSON(url, timeout = 45000) {
   }
   throw new Error(`Portable application did not expose ${url}`);
 }
-async function quitThroughInspector(url) {
+async function evaluateThroughInspector(url, expression) {
   const targets = await waitJSON(url, 5000);
   const ws = new WebSocket(targets[0].webSocketDebuggerUrl);
   let timer;
   try {
-    await new Promise((resolve, reject) => {
+    return await new Promise((resolve, reject) => {
       timer = setTimeout(() => reject(new Error('Portable inspector shutdown timed out')), 5000);
       ws.onopen = () => ws.send(JSON.stringify({
         id: 1,
         method: 'Runtime.evaluate',
-        params: { expression: 'require("electron").app.quit()', includeCommandLineAPI: true },
+        params: { expression, includeCommandLineAPI: true, returnByValue: true },
       }));
       ws.onmessage = event => {
         const message = JSON.parse(event.data);
         if (message.id !== 1) return;
         if (message.error || message.result?.exceptionDetails) reject(new Error(JSON.stringify(message)));
-        else resolve();
+        else resolve(message.result?.result?.value);
       };
       ws.onerror = reject;
     });
@@ -53,11 +54,13 @@ async function quitThroughInspector(url) {
     ws.close();
   }
 }
+const quitThroughInspector = url => evaluateThroughInspector(url, 'require("electron").app.quit()');
 
 const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const executablePath = resolve(process.argv[2] || `release/Model-Sentinel-${version}-Windows-x64.exe`);
 const profile = await mkdtemp(join(tmpdir(), 'model-sentinel-portable-'));
 const port = await freePort(), inspectorPort = await freePort();
+const inspectFloating = work => evaluateThroughInspector(`http://127.0.0.1:${inspectorPort}/json/list`, `(${work.toString()})(require("electron"))`);
 const judgeGate = judgementFixture();
 const fixture = await createMockServer({ textForRequest: input => judgeGate.textForRequest(input) ?? htmlReply(input) ?? narrativeReply(input), usageForRequest: input => cacheUsageFixture(input) ?? (input.body.model === 'judge-model' || ['judge-source', 'judge-html-wait'].includes(input.body.input) ? { input_tokens: 10, output_tokens: 12 } : usageFixture(input)), beforeReply: judgeGate.beforeReply });
 const checks = [], errors = [];
@@ -89,6 +92,7 @@ try {
   await expect(page.getByLabel('固定答案', { exact: true })).toBeVisible();
   expect((await page.evaluate(() => window.sentinel.getState())).appInfo.version).toBe(version);
   checks.push('exact portable executable extracts and opens a clean configuration');
+  checks.push(...await verifyBuiltinEditor(page));
   await mkdir('artifacts/screenshots', { recursive: true });
   // Check fixed usage totals before the other scenarios add retained history.
   checks.push(...await verifyUsage(page, {
@@ -161,6 +165,36 @@ try {
     getFloating: async () => floating,
     screenshotPrefix: resolve('artifacts/screenshots/portable-html'),
   }));
+  await page.evaluate(() => window.sentinel.expandFloat(false));
+  await floating.mouse.move(-10, -10);
+  await inspectFloating(({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'));
+    const bounds = window.getBounds(), area = screen.getDisplayMatching(bounds).workArea;
+    window.setBounds({ x: area.x + area.width - bounds.width - 6, y: area.y + 101, width: bounds.width, height: bounds.height });
+  });
+  await expect(floating.getByTestId('float-docked')).toBeVisible();
+  const nativeBounds = () => inspectFloating(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float')).getBounds());
+  const dockBounds = await nativeBounds();
+  expect(dockBounds.width).toBeLessThanOrEqual(48);
+  for (let i = 0; i < 6; i++) {
+    await page.evaluate(() => window.sentinel.setAuto(false));
+    await floating.waitForTimeout(220);
+    expect(await nativeBounds()).toEqual(dockBounds);
+  }
+  await floating.getByTestId('float-docked').hover();
+  await expect(floating.getByTestId('float-compact')).toBeVisible();
+  await floating.locator('.float-compact-row').first().hover();
+  await floating.waitForTimeout(550);
+  await expect(floating.getByTestId('float-compact')).toBeVisible();
+  await floating.locator('.float-compact-row').first().click();
+  await floating.mouse.move(-10, -10);
+  await floating.waitForTimeout(450);
+  await expect(floating.getByTestId('float-expanded')).toBeVisible();
+  await floating.keyboard.press('Escape');
+  await expect(floating.getByTestId('float-docked')).toBeVisible();
+  expect(await nativeBounds()).toEqual(dockBounds);
+  await floating.screenshot({ path: resolve('artifacts/screenshots/portable-docked.png') });
+  checks.push('exact portable docking stays stable across broadcasts, reveals the model list and preserves pinned details');
   const beforeRestart = await page.evaluate(() => window.sentinel.getState());
   await shutdown();
   const disk = await readFile(join(profile, 'state.json'), 'utf8');
@@ -179,6 +213,12 @@ try {
   const afterRestart = await restartedPage.evaluate(() => window.sentinel.getState());
   expect(afterRestart.config).toEqual(beforeRestart.config);
   expect(afterRestart.history).toEqual(beforeRestart.history);
+  await expect.poll(() => restartedContext.pages().some(window => window.url().includes('view=float'))).toBe(true);
+  const restartedFloating = restartedContext.pages().find(window => window.url().includes('view=float'));
+  await restartedFloating.mouse.move(-10, -10);
+  await expect(restartedFloating.getByTestId('float-docked')).toBeVisible();
+  expect(await nativeBounds()).toEqual(dockBounds);
+  checks.push('exact portable restart restores the docked status strip at the same position and size');
   await restartedPage.evaluate(() => window.sentinel.run(['text-html']));
   await expect.poll(async () => (await restartedPage.evaluate(() => window.sentinel.getState())).activeTargetIds.length, { timeout: 20000 }).toBe(0);
   expect(fixture.requests.at(-1).authorization).toBe('Bearer html-fixture-private-key');

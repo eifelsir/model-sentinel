@@ -10,10 +10,11 @@ export function judgementFixture() {
   return {
     beforeReply: ({ body }) => promptFrom(body) === 'judge-html-wait' ? new Promise(resolve => { release = resolve; }) : undefined,
     release: () => release?.(),
-    textForRequest: ({ body }) => {
+    textForRequest: ({ body, model }) => {
       const prompt = promptFrom(body);
       const sample = samples.find(sample => builtinPrompts.find(p => p.id === sample.builtinId).prompt === prompt);
       if (sample) return sample.text;
+      if (prompt === builtinPrompts.find(p => p.id === 'builtin-combined').prompt) return model === 'combined-wrong' ? '21和47.24' : '21和46.24';
       if (prompt === 'judge-source') return 'You will need a grand total of **21 pieces** to guarantee it.';
       if (prompt === 'judge-html-wait') return 'No HTML was generated.';
       if (prompt.startsWith('Extract the final answer from an existing model reply.')) {
@@ -93,7 +94,7 @@ export async function verifyJudgement(page, { baseUrl, gate, getFloating, screen
     config.targets[0].promptIds = questions.map(p => p.id);
     await window.sentinel.saveConfig(config);
     await window.sentinel.run(['tested']);
-  }, builtinPrompts.filter(p => p.type === 'text'));
+  }, builtinPrompts.filter(p => ['builtin-milk', 'builtin-candy'].includes(p.id)));
   await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).activeTargetIds.length).toBe(0);
   let state = await page.evaluate(() => window.sentinel.getState());
   expect(state.history[0].status).toBe('normal');
@@ -125,5 +126,32 @@ export async function verifyJudgement(page, { baseUrl, gate, getFloating, screen
     config.prompts.find(prompt => prompt.id === 'builtin-candy').expected = '21';
     await window.sentinel.saveConfig(config);
   });
+  await page.evaluate(async question => {
+    const { config } = await window.sentinel.getState();
+    config.settings.answerJudgeTargetId = '';
+    config.prompts = [question];
+    config.targets[0].promptIds = [question.id];
+    await window.sentinel.saveConfig(config);
+    await window.sentinel.run(['tested']);
+  }, builtinPrompts.find(p => p.id === 'builtin-combined'));
+  await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).activeTargetIds.length).toBe(0);
+  state = await page.evaluate(() => window.sentinel.getState());
+  expect(state.history[0].status).toBe('normal');
+  expect(state.history[0].results[0].answer).toBe('21和46.24');
+  expect(state.history[0].results[0].judgement).toBeUndefined();
+  await expect(floating.locator('.float-compact-row').first().locator('.float-compact-answers')).toContainText('21和46.24');
+  await page.screenshot({ path: `${screenshotPrefix}-combined.png` });
+  await page.evaluate(async () => {
+    const { config } = await window.sentinel.getState();
+    config.targets[0].model = 'combined-wrong';
+    await window.sentinel.saveConfig(config);
+    await window.sentinel.run(['tested']);
+  });
+  await expect.poll(async () => (await page.evaluate(() => window.sentinel.getState())).activeTargetIds.length).toBe(0);
+  state = await page.evaluate(() => window.sentinel.getState());
+  expect(state.history[0].status).toBe('degraded');
+  expect(state.history[0].results[0].answer).toBe('21和47.24');
+  await expect(floating.locator('.float-compact-row').first().locator('.status')).toHaveText('降智');
+  checks.push('combined preset is normal for 21和46.24 and degraded when either component is wrong, with both values visible in the compact float');
   return checks;
 }

@@ -1455,6 +1455,102 @@ input[type="checkbox"][role="switch"]:checked:before {
   display: flex;
   flex-direction: column;
 }
+.float-dock {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  border: 1px solid #c8d6ce;
+  background: #f7faf8;
+}
+.float-dock.vertical {
+  flex-direction: column;
+}
+.float-dock-handle {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 25px;
+}
+.float-dock-handle img {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+.float-dock-status {
+  -webkit-app-region: no-drag;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  padding: 4px;
+  background: transparent;
+  color: #718278;
+}
+.vertical .float-dock-status {
+  flex-direction: column;
+}
+.float-dock-status:hover {
+  background: #eaf2ed;
+}
+.float-dock-bars {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: 3px;
+  align-items: stretch;
+  justify-content: center;
+}
+.vertical .float-dock-bars {
+  flex-direction: column;
+  width: 14px;
+}
+.horizontal .float-dock-bars {
+  height: 14px;
+}
+.float-dock-bars i {
+  display: block;
+  flex: 1;
+  max-height: 7px;
+  min-height: 3px;
+  min-width: 3px;
+  border-radius: 1px;
+  background: #a9b6ae;
+}
+.horizontal .float-dock-bars i {
+  max-height: none;
+  max-width: 7px;
+}
+.float-dock-bars .normal {
+  background: var(--green);
+}
+.float-dock-bars .degraded {
+  background: var(--red);
+}
+.float-dock-bars .insufficient {
+  background: var(--amber);
+}
+.float-dock-bars .detecting {
+  background: #438bb7;
+}
+.float-dock-bars .generated {
+  background: #5a83b0;
+}
+.dock-overall.normal {
+  color: var(--green);
+}
+.dock-overall.degraded {
+  color: var(--red);
+}
+.dock-overall.insufficient {
+  color: var(--amber);
+}
 .float-header {
   -webkit-app-region: drag;
   display: flex;

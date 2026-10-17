@@ -37,11 +37,13 @@ try {
   await expect.poll(async () => (await readPlacement()).x).toBe(edge);
   const savedPlacement = await readPlacement();
   await page.evaluate(() => window.sentinel.expandFloat(true));
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float')).setSize(520, 620);
+  const resized = await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'));
+    window.setSize(520, 620);
+    return window.getBounds();
   });
-  await expect.poll(async () => (await readPlacement()).detailWidth).toBe(520);
-  await expect.poll(async () => (await readPlacement()).detailHeight).toBe(620);
+  await expect.poll(async () => (await readPlacement()).detailWidth).toBe(resized.width);
+  await expect.poll(async () => (await readPlacement()).detailHeight).toBe(resized.height);
   await page.evaluate(() => window.sentinel.expandFloat(false));
   await app.evaluate(({ BrowserWindow, screen }) => {
     const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'));
@@ -60,9 +62,27 @@ try {
   await expect(page.getByLabel('提示词', { exact: true })).toBeVisible();
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'))?.getBounds().x)).toBe(savedPlacement.x);
   await page.evaluate(() => window.sentinel.expandFloat(true));
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'))?.getContentBounds().width)).toBe(520);
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'))?.getContentBounds().height)).toBe(620);
+  const restored = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float')).getBounds());
+  expect(Math.abs(restored.width - resized.width)).toBeLessThanOrEqual(2);
+  expect(Math.abs(restored.height - resized.height)).toBeLessThanOrEqual(2);
+  expect((await readPlacement()).detailWidth).toBe(resized.width);
+  expect((await readPlacement()).detailHeight).toBe(resized.height);
   checks.push('native dragging snaps near screen edges and restores both compact location and resized details after restart');
+  const floating = app.windows().find(window => window.url().includes('view=float'));
+  await floating.getByRole('button', { name: '固定悬浮窗', exact: true }).click();
+  await app.evaluate(({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'));
+    const area = screen.getPrimaryDisplay().workArea;
+    window.setBounds({ x: area.x, y: area.y, width: area.width + 160, height: area.height + 100 });
+  });
+  await expect.poll(() => app.evaluate(({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=float'));
+    const area = screen.getDisplayMatching(window.getBounds()).workArea;
+    const bounds = window.getBounds();
+    return bounds.width <= area.width + 2 && bounds.height <= area.height + 2;
+  })).toBe(true);
+  await expect(floating.getByTestId('float-expanded')).toBeVisible();
+  checks.push('oversized detail resizing is constrained to the work area while remaining expanded');
   expect(errors).toEqual([]);
   await writeFile('artifacts/floating-results.json', JSON.stringify({ passed: true, profile, checks, errors }, null, 2));
   console.log(JSON.stringify({ passed: true, checks }, null, 2));

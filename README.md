@@ -15,13 +15,13 @@ The interface is currently in Simplified Chinese. No hosted account or additiona
 - **Multiple endpoints and models.** Responses API, Chat Completions, Gemini native, and Claude Messages; model discovery and manual IDs. OpenAI, Grok, Gemini, Claude, and compatible intermediary services.
 - **Repeatable questions.** Several questions per model, local answer extraction and comparison, concurrent requests, configurable intervals, and manual or automatic runs.
 - **Optional model assistance.** When local automatic extraction is unclear, use the current model or another configured model once to extract an answer with a quotation. Expected answers stay local; auxiliary usage and evidence are recorded.
-- **Desktop monitor.** A narrow, traffic-monitor-style always-on-top window keeps connection/model names, verdicts, text answers, history bars and Token totals visible. Hover to inspect the list, click a model to pin its details, or use Escape to collapse. It snaps to screen edges and remembers position and detail size.
+- **Desktop monitor.** A narrow, traffic-monitor-style always-on-top window keeps connection/model names, verdicts, text answers, history bars and Token totals visible. Hover to inspect the list, click a model to pin its details, or use Escape to collapse. It snaps to all four screen edges, auto-hides to a status strip, and remembers docking, position and detail size.
 - **HTML/SVG tests.** Generate a complete SVG animation page. Browse the selected model's most recent eight rounds as real thumbnails and open an interactive, isolated preview in a separate window.
 - **Token accounting.** Per-question and per-round input/output totals, available cache/reasoning details, and per-model totals across retained history. Missing or partial reporting is explicitly labeled.
 - **Model settings.** Provider-aware reasoning choices, output limits, timeouts, per-model question selection, and advanced request JSON.
 - **Optional cache bypass.** Saved switches in the workbench and Settings request fresh input with a per-request random prefix and cache directives across all four protocols, including HTML and auxiliary extraction.
 - **Local persistence.** Atomic configuration saves, encrypted keys, a backup copy, and key-free JSON export.
-- **Built-in questions.** Milk and candy reasoning questions, plus an editable HTML/SVG bicycle animation prompt.
+- **Built-in questions.** Milk (`46.24`), candy (`21`), a combined candy-then-milk question (`21和46.24`), and an editable HTML/SVG bicycle animation prompt. The individual text prompts request answer-only replies.
 
 ## Screenshots
 
@@ -35,12 +35,14 @@ Screenshots use local test responses. They illustrate the application, not a ben
 
 ## Quick Start
 
-1. Download `Model-Sentinel-1.3.0-Windows-x64.exe` from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
+1. Download the Windows x64 executable from [Releases](https://github.com/eifelsir/model-sentinel/releases/latest) and open it. Node.js is not needed.
 2. Select a built-in question or create one with a prompt and expected answer. Choose the HTML/SVG type for page-generation questions.
 3. Add a connection with its **Base URL**, **KEY**, and **protocol**. Fetch the model list or enter a model ID.
 4. Assign questions to each model and start detection. Enable automatic detection for recurring checks.
 
 Close the main window to keep monitoring from the system tray. Use **退出** in the tray menu to quit. Drag the compact widget's title bar to move it; it snaps near screen edges. Hover over the body to expand the model list and move away to collapse. Click a model to keep its details open, or click the summary to pin the list. The header provides back, pin, collapse and main-window controls; Escape also collapses. Resize the expanded window as needed. HTML thumbnails open separately.
+
+At a screen edge, moving away hides the widget to a slim status strip. Hover over the strip to restore the compact model list; clicking a model opens and pins its details. Drag the title bar away from the edge to return to ordinary compact mode. Pinned details remain open until unpinned or collapsed.
 
 When upgrading, exit the previous version from its tray before opening the new executable. Existing configuration is reused. The version and actual data folder are shown in Settings.
 
@@ -118,6 +120,7 @@ npm run test:judgement
 npm run test:html
 npm run test:answers
 npm run test:floating
+npm run test:float-edge
 npm run test:cache
 node scripts/desktop-boundary-qa.mjs
 node scripts/desktop-regressions.mjs

@@ -35,6 +35,8 @@ jobs:
         run: npm exec electron-builder -- --win portable --x64 --config.electronDist=node_modules/electron/dist
       - name: Verify packaged application
         run: node scripts/packaged-smoke.mjs
+      - name: Verify packaged edge docking
+        run: node scripts/float-edge-qa.mjs "release/win-unpacked/Model Sentinel.exe"
       - name: Verify exact portable and relaunch
         run: node scripts/portable-smoke.mjs
       - name: Publish release

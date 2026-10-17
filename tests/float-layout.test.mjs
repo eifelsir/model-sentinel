@@ -37,3 +37,26 @@ test('dragged monitors are pulled completely into the work area before placement
   assert.deepEqual(snapPlacement({ x: 1200, y: 700, width: 300, height: 190 }, area), { x: 980, y: 530 });
   assert.deepEqual(snapPlacement({ x: -1200, y: 800, width: 300, height: 190 }, { x: -1024, y: -100, width: 1024, height: 700 }), { x: -1024, y: 410 });
 });
+
+test('docked strips and revealed lists stay attached to their saved edge', () => {
+  const right = { x: 980, y: 101, edge: 'right' };
+  const strip = monitorBounds(area, right, 2, false, true);
+  assert.ok(strip.width <= 40);
+  assert.equal(strip.x + strip.width, 1280);
+  const revealed = monitorBounds(area, right, 2, false);
+  assert.equal(revealed.x + revealed.width, 1280);
+  const expanded = monitorBounds(area, right, 2, true);
+  assert.equal(expanded.x + expanded.width, 1280);
+  assert.equal(expanded.y, 101);
+});
+
+test('top and bottom docks shrink vertically and survive work-area changes', () => {
+  for (const edge of ['top', 'bottom']) {
+    const bounds = monitorBounds(area, { x: 400, y: 530, edge }, 8, false, true);
+    assert.ok(bounds.height <= 40);
+    assert.equal(edge === 'top' ? bounds.y : bounds.y + bounds.height, edge === 'top' ? 0 : 720);
+  }
+  const shifted = monitorBounds({ x: -1024, y: -100, width: 1024, height: 700 }, { x: 980, y: 101, edge: 'right' }, 2, false, true);
+  assert.equal(shifted.x + shifted.width, 0);
+  assert.equal(shifted.y, 101);
+});

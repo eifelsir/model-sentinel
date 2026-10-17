@@ -1,9 +1,9 @@
 import { validateReasoning } from './reasoning.mjs';
-import { builtinPrompts } from './builtins.mjs';
+import { builtinPrompts, builtinPromptsVersion } from './builtins.mjs';
 
 export const PROTOCOLS = ['responses', 'chat', 'gemini', 'anthropic'];
 export function defaultConfig() {
-  return { version: 1, builtinsVersion: 1, connections: [], prompts: structuredClone(builtinPrompts), targets: [], settings: { concurrency: 4, autoRun: false, floatVisible: true, launchAtLogin: false, answerJudgeTargetId: '', bypassCache: false } };
+  return { version: 1, builtinsVersion: builtinPromptsVersion, connections: [], prompts: structuredClone(builtinPrompts), targets: [], settings: { concurrency: 4, autoRun: false, floatVisible: true, launchAtLogin: false, answerJudgeTargetId: '', bypassCache: false } };
 }
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
 function text(value, name, max = 100000) {
@@ -33,7 +33,7 @@ function protocol(value, fallback) {
 export function validateConfig(input) {
   requireValue(input && input.version === 1, 'Unsupported configuration version');
   const result = defaultConfig();
-  result.builtinsVersion = input.builtinsVersion === 1 ? 1 : 0;
+  result.builtinsVersion = Number.isInteger(input.builtinsVersion) && input.builtinsVersion >= 0 && input.builtinsVersion <= builtinPromptsVersion ? input.builtinsVersion : 0;
   result.connections = entries(input.connections, 'connection', c => {
     let url;
     try { url = new URL(c.baseUrl); } catch { throw new Error('Invalid connection URL'); }

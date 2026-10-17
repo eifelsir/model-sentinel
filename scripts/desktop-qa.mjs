@@ -3,6 +3,7 @@ import { mkdtemp, readFile, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createMockServer } from "./mock-server.mjs";
+import { verifyBuiltinEditor } from "./builtin-checks.mjs";
 
 const profile = await mkdtemp(join(tmpdir(), "model-sentinel-qa-"));
 const screenshots = resolve("artifacts/screenshots");
@@ -29,6 +30,7 @@ try {
   await expect(page.getByLabel("提示词", { exact: true })).toBeVisible();
   await expect(page.getByLabel("固定答案", { exact: true })).toBeVisible();
   await expect(page.getByLabel("固定答案", { exact: true })).toHaveValue("46.24");
+  checks.push(...await verifyBuiltinEditor(page));
   await page.getByRole("button", { name: "新建题目", exact: true }).click();
   await expect(page.getByLabel("提示词", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("固定答案", { exact: true })).toHaveValue("");
@@ -43,7 +45,7 @@ try {
         (await page.evaluate(() => window.sentinel.getState())).config.prompts
           .length,
     )
-    .toBe(4);
+    .toBe(5);
   await page.evaluate(async () => {
     const { config } = await window.sentinel.getState();
     config.prompts = config.prompts.filter(prompt => prompt.name === "乘法验证");

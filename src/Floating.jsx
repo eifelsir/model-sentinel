@@ -14,6 +14,8 @@ export function Floating({ state, api, perform, error }) {
   const windowRef = useRef(null);
   const pinnedRef = useRef(false), hoverTimer = useRef(null), leaveTimer = useRef(null);
   const expanded = state.floatExpanded;
+  const docked = state.floatDocked;
+  const edge = state.floatEdge;
   const targets = state.config.targets;
   const latest = targets.map(target => ({
     target,
@@ -55,6 +57,7 @@ export function Floating({ state, api, perform, error }) {
   }
   function hover() {
     enter();
+    if (edge) return;
     if (expanded) return;
     clearTimeout(hoverTimer.current);
     hoverTimer.current = setTimeout(() => perform(() => api.expandFloat(true)), 180);
@@ -73,7 +76,7 @@ export function Floating({ state, api, perform, error }) {
     }
   }, [expanded]);
   useEffect(() => {
-    if (!expanded || pinned) return;
+    if ((!expanded && !edge) || docked || pinned) return;
     let outsideAt = null;
     // Native resizing can clear hover without delivering a mouseleave event.
     const timer = setInterval(() => {
@@ -84,7 +87,7 @@ export function Floating({ state, api, perform, error }) {
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [expanded, pinned]);
+  }, [expanded, pinned, edge, docked]);
   useEffect(() => {
     function keydown(event) {
       if (event.key === "Escape") collapse();
@@ -95,6 +98,33 @@ export function Floating({ state, api, perform, error }) {
       window.removeEventListener("keydown", keydown);
     };
   }, []);
+
+  if (docked) return (
+    <div
+      ref={windowRef}
+      className={`float-dock ${edge === "top" || edge === "bottom" ? "horizontal" : "vertical"}`}
+      data-testid="float-docked"
+      onMouseEnter={() => {
+        clearTimers();
+        hoverTimer.current = setTimeout(() => perform(() => api.revealFloat()), 160);
+      }}
+      onMouseLeave={clearTimers}
+    >
+      <div className="float-dock-handle" title="模型检测"><img src={appIcon} alt="" /></div>
+      <button type="button" className="float-dock-status" aria-label="展开悬浮窗" onClick={() => open()}>
+        <Activity size={14} className={`dock-overall ${overall}`} />
+        <span className="float-dock-bars">
+          {latest.slice(0, 8).map(({ target, connection, round }) => (
+            <i
+              key={target.id}
+              className={round?.status || "pending"}
+              title={`${connection?.name || ""} · ${target.model}：${statuses[round?.status] || statuses.pending}`}
+            />
+          ))}
+        </span>
+      </button>
+    </div>
+  );
 
   return (
     <div
